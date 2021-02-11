@@ -1,70 +1,119 @@
 ################################################################################################# I ### Clinical mining----
-# radiomics1 %>% 
-#   ggplot(aes(x= Race_Cancer_Registry)) + 
-#   geom_bar()+
-#   coord_flip()+
-#   theme_minimal()
-# 
-# radiomics1 %>% 
-#   ggplot(aes(x= Ethnicity_Cancer_Registry)) + 
-#   geom_bar()+
-#   coord_flip()+
-#   theme_minimal()
-# 
-# radiomics1 %>% 
-#   ggplot(aes(x= Primary_Site)) + 
-#   geom_bar()+
-#   coord_flip()+
-#   theme_minimal()
-# 
-# radiomics1 %>% 
-#   ggplot(aes(x= Histology)) + 
-#   geom_bar()+
-#   coord_flip()+
-#   theme_minimal()
-# 
-# radiomics1 %>% 
-#   ggplot(aes(x= TNM_CS__Mixed_Group_Stage)) + 
-#   geom_bar()+
-#   coord_flip()+
-#   theme_minimal()
+# Table clinical
 radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
-  select(dataset, Race_Cancer_Registry, Ethnicity_Cancer_Registry, Primary_Site, Histology, TNM_CS__Mixed_Group_Stage) %>% 
+  select(dataset, race_cancer_registry, ethnicity_cancer_registry, primary_site, histology, tnm_stage) %>% 
   tbl_summary(by = dataset, 
-              sort = list(everything() ~ "frequency", TNM_CS__Mixed_Group_Stage ~ "alphanumeric")) %>% 
+              sort = list(everything() ~ "frequency", tnm_stage ~ "alphanumeric")) %>% 
   bold_labels()
 
 radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
-  select(treatment__type, Race_Cancer_Registry, Ethnicity_Cancer_Registry, Primary_Site, Histology, TNM_CS__Mixed_Group_Stage) %>% 
-  tbl_summary(by = treatment__type, 
-              sort = list(everything() ~ "frequency", TNM_CS__Mixed_Group_Stage ~ "alphanumeric")) %>% 
+  select(treatment_type, race_cancer_registry, ethnicity_cancer_registry, primary_site, histology, tnm_stage) %>% 
+  tbl_summary(by = treatment_type, 
+              sort = list(everything() ~ "frequency", tnm_stage ~ "alphanumeric")) %>% 
   bold_labels() %>% add_p()
 
+# Table age at recurremce, diagnosis, drugs, surgery
+radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(dataset, "age_at_Dx", "age_at_first_adjuvant_chem", "age_at_first_neoadjuvant_chem", "age_at_first_surgery",
+         "age_at_first_chemo", "age_at_surgery", "age_at_first_recurrence", "month_at_first_recurrence") %>% 
+  tbl_summary(by = dataset,
+              digits = list(everything()~ 2)) %>% 
+  bold_labels()
+
+# Plot treatment
 radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
-  ggplot(aes(x= Summary_of_Rx__1st_course)) + 
+  ggplot(aes(x= summary_of_rx_1st_course)) + 
   geom_bar()+
   coord_flip()+
   theme_minimal()
 
 radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
-  ggplot(aes(x= treatment__type)) + 
+  ggplot(aes(x= treatment_type)) + 
   geom_bar()+
   coord_flip()+
   theme_minimal()
 
 radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
-  ggplot(aes(x= Debulking_status)) + 
+  ggplot(aes(x= debulking_status)) + 
   geom_bar()+
   coord_flip()+
   theme_minimal()
 
-# table age at recurremce, diagnosis, drugs, surgery
+# Table treatment by recurrence
+radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment_type, debulking_status, has_the_patient_recurred_, tnm_stage, summary_of_rx_1st_course) %>% 
+  tbl_summary(by = has_the_patient_recurred_, 
+              sort = list(everything() ~ "frequency")) %>% 
+  bold_labels() %>% add_p()
 
-# pie chart brca germline somatic + table
+tbl1 <- radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment_type, month_at_first_recurrence) %>% 
+  tbl_summary(by = treatment_type, 
+              digits = list(everything() ~ 2)) %>% 
+  bold_labels() %>% add_p()
+tbl2 <- radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(debulking_status, month_at_first_recurrence) %>% 
+  tbl_summary(by = debulking_status, 
+              digits = list(everything() ~ 2)) %>% 
+  bold_labels() %>% add_p()
+tbl3 <- radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(tnm_stage, month_at_first_recurrence) %>% 
+  tbl_summary(by = tnm_stage, 
+              digits = list(everything() ~ 2)) %>% 
+  bold_labels() %>% add_p()
+tbl4 <- radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(summary_of_rx_1st_course, month_at_first_recurrence) %>% 
+  tbl_summary(by = summary_of_rx_1st_course, 
+              digits = list(everything() ~ 2)) %>% 
+  bold_labels() %>% add_p()
+
+tbl_merge(list(tbl1, tbl2, tbl3, tbl4),
+          tab_spanner = c("**treatment_type**", "**debulking_status**", "**tnm_stage**", "**summary_of_rx_1st_course**")) %>%
+  bold_labels() %>%
+  italicize_levels()
+
+# Table brca by recurrence
+radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(has_the_patient_recurred_, germline_brca1_mutation, germline_brca2_mutation, 
+         somatic_brca1_mutation, somatic_brca2_mutation, any_unclassified_brca_mutation) %>%
+  tbl_summary(by = has_the_patient_recurred_, 
+              sort = list(everything() ~ "frequency"),
+              missing = "no") %>% 
+  bold_labels() %>% add_p()
+
+# Plot brca germline somatic
+radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(mrn, germline_brca1_mutation, somatic_brca1_mutation, germline_brca2_mutation, somatic_brca2_mutation) %>% 
+  pivot_longer(cols = c(germline_brca1_mutation, somatic_brca1_mutation, germline_brca2_mutation, somatic_brca2_mutation), 
+               names_to = "name",values_to = "value") %>%
+  filter(value == "Yes") %>% 
+  mutate(brca = case_when(
+    str_detect(name, "brca1") ~ "brca1",
+    str_detect(name, "brca2") ~ "brca2"
+  )) %>% 
+  mutate(name = str_remove_all(name, "_brca1|_brca2|_mutation")) %>% 
+  ggplot(aes(x = brca, fill= name)) + 
+  geom_bar(position = "stack")+
+  coord_flip()+
+  theme_minimal()
 
 # table comorbidities
-
-
+radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  mutate(pre_dx_hypertension = ifelse(str_detect(hypertension, "pre"), "hypertension", "no hypertension")) %>% 
+  mutate(pre_dx_diabetes = ifelse(str_detect(diabetes_mellitus, "pre"), "diabetes", "no diabetes")) %>% 
+  mutate(pre_dx_hypercholesterolemia = ifelse(str_detect(hypercholesterolemia, "pre"), 
+                                              "hypercholesterolemia", "no hypercholesterolemia")) %>% 
+  mutate(pre_dx_CKd = ifelse(str_detect(chronic_kidney_disease, "pre"), "CKd", "no CKd")) %>% 
+  mutate(pre_dx_cardiac_conditions = ifelse(str_detect(cardiac_conditions_including_bu, "pre"), 
+                                            "cardiac conditions", "no cardiac conditions")) %>% 
+  select("has_the_patient_recurred_", "pre_dx_hypertension", "pre_dx_diabetes",
+         "pre_dx_hypercholesterolemia", "pre_dx_CKd", "pre_dx_cardiac_conditions") %>%
+  tbl_summary(by = has_the_patient_recurred_, 
+              sort = list(everything() ~ "frequency"),
+              missing = "no") %>%
+  # modify_spanning_header(starts_with("stat_") ~ "**Randomization Assignment**")
+  bold_labels() %>% add_p()
+  show_header_names(a)
 
 ################################################################################################# II ### Radiomics mining----
 # ICC
@@ -79,6 +128,8 @@ icc(
   type = "consistency", unit = "average"
 )
 
+library(psych) # Koo and Li (2016)
+ICC(ICC_rad)  # between 0.75 and 0.90: good
 
 # Correlation ----
 # Test normality
