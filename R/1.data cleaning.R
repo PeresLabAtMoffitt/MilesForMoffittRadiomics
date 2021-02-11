@@ -2,6 +2,12 @@
 library(tidyverse)
 library(scales)
 library(data.table)
+library(gtsummary)
+library(gplots)
+library(heatmap.plus)
+library(RColorBrewer)
+# library(corrplot)
+library(ggcorrplot)
 
 ################################################################################################# I ### Load data----
 radiomics <- read.csv(paste0("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_01062021.csv")) %>%

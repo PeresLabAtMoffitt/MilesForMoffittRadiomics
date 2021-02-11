@@ -1,5 +1,68 @@
 ################################################################################################# I ### Clinical mining----
+# radiomics1 %>% 
+#   ggplot(aes(x= Race_Cancer_Registry)) + 
+#   geom_bar()+
+#   coord_flip()+
+#   theme_minimal()
+# 
+# radiomics1 %>% 
+#   ggplot(aes(x= Ethnicity_Cancer_Registry)) + 
+#   geom_bar()+
+#   coord_flip()+
+#   theme_minimal()
+# 
+# radiomics1 %>% 
+#   ggplot(aes(x= Primary_Site)) + 
+#   geom_bar()+
+#   coord_flip()+
+#   theme_minimal()
+# 
+# radiomics1 %>% 
+#   ggplot(aes(x= Histology)) + 
+#   geom_bar()+
+#   coord_flip()+
+#   theme_minimal()
+# 
+# radiomics1 %>% 
+#   ggplot(aes(x= TNM_CS__Mixed_Group_Stage)) + 
+#   geom_bar()+
+#   coord_flip()+
+#   theme_minimal()
+radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(dataset, Race_Cancer_Registry, Ethnicity_Cancer_Registry, Primary_Site, Histology, TNM_CS__Mixed_Group_Stage) %>% 
+  tbl_summary(by = dataset, 
+              sort = list(everything() ~ "frequency", TNM_CS__Mixed_Group_Stage ~ "alphanumeric")) %>% 
+  bold_labels()
 
+radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment__type, Race_Cancer_Registry, Ethnicity_Cancer_Registry, Primary_Site, Histology, TNM_CS__Mixed_Group_Stage) %>% 
+  tbl_summary(by = treatment__type, 
+              sort = list(everything() ~ "frequency", TNM_CS__Mixed_Group_Stage ~ "alphanumeric")) %>% 
+  bold_labels() %>% add_p()
+
+radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
+  ggplot(aes(x= Summary_of_Rx__1st_course)) + 
+  geom_bar()+
+  coord_flip()+
+  theme_minimal()
+
+radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
+  ggplot(aes(x= treatment__type)) + 
+  geom_bar()+
+  coord_flip()+
+  theme_minimal()
+
+radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
+  ggplot(aes(x= Debulking_status)) + 
+  geom_bar()+
+  coord_flip()+
+  theme_minimal()
+
+# table age at recurremce, diagnosis, drugs, surgery
+
+# pie chart brca germline somatic + table
+
+# table comorbidities
 
 
 
@@ -17,11 +80,152 @@ icc(
 )
 
 
-# Heatmap
-library(gplots)
-library(heatmap.plus)
-library(RColorBrewer)
+# Correlation ----
+# Test normality
+qqnorm(radiomics1$statistical_mean)
+# Pearson
+a <- radiomics1[, 5:310] %>% select(where(~ any(. != 0)))
 
+mat <- cor(a, use = "pairwise.complete.obs")
+corrplot.mixed(mat, tl.pos = "n")
+
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           # outline.col = "darkblue", # the outline of the circle or square
+           # hc.method = "complete",
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           # colors = viridis::inferno(n=3),
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           # p.mat = pmat, # Add correlation significance
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+
+a <- radiomics1[, 5:310] %>% select(contains("statistical")) %>% select(where(~ any(. != 0)))
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+a <- radiomics1[, 5:310] %>% select(contains("histogram")) %>% select(where(~ any(. != 0)))
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+a <- radiomics1[, 5:310] %>% select(contains("fraction")) %>% select(where(~ any(. != 0)))
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+a <- radiomics1[, 5:310] %>% select(contains("avgcoocurrence")) %>% select(where(~ any(. != 0)))
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+a <- radiomics1[, 5:310] %>% select(contains("avg_3d")) %>% select(where(~ any(. != 0)))
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+a <- radiomics1[, 5:310] %>% select(contains("glszm")) %>% select(where(~ any(. != 0)))
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+a <- radiomics1[, 5:310] %>% select(contains("ngtdm")) %>% select(where(~ any(. != 0)))
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+a <- radiomics1[, 5:310] %>% select(contains("features")) %>% select(where(~ any(. != 0)))
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+a <- radiomics1[, 5:310] %>% select(contains("wavelet")) %>% select(where(~ any(. != 0)))
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+a <- radiomics1[, 5:310] %>% select(-matches("statistical|histogram|fraction|avgcoocurrence|avg_3d|glszm|ngtdm|features|wavelet")) %>% select(where(~ any(. != 0)))
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "circle", 
+           type = "lower", # show the top half panel
+           lab = TRUE, # add correlation nbr
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           lab_col = "darkblue", lab_size = 3, # col and size of the correlation nbr
+           sig.level = 0.05, insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10, tl.col = "red", tl.srt = 40,
+           digits = 2
+)
+
+# Heatmap
 df1 <- radiomics %>% select(-date, -segmented_by) %>% 
   unite(mrn, c(mrn, lesion_id), sep = "_", remove = TRUE) %>% 
   `row.names<-`(.$mrn) %>% 
