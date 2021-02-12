@@ -1,67 +1,68 @@
 ################################################################################################# I ### Clinical mining----
 # Table clinical
-radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
-  select(dataset, race_cancer_registry, ethnicity_cancer_registry, primary_site, histology, tnm_stage) %>% 
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(dataset, race, ethnicity, primary_site, histology, tnm_stage) %>% 
   tbl_summary(by = dataset, 
               sort = list(everything() ~ "frequency", tnm_stage ~ "alphanumeric")) %>% 
   bold_labels()
 
-radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
-  select(treatment_type, race_cancer_registry, ethnicity_cancer_registry, primary_site, histology, tnm_stage) %>% 
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment_type, race, ethnicity, primary_site, histology, tnm_stage) %>% 
   tbl_summary(by = treatment_type, 
               sort = list(everything() ~ "frequency", tnm_stage ~ "alphanumeric")) %>% 
   bold_labels() %>% add_p()
 
 # Table age at recurremce, diagnosis, drugs, surgery
-radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
-  select(dataset, "age_at_Dx", "age_at_first_adjuvant_chem", "age_at_first_neoadjuvant_chem", "age_at_first_surgery",
-         "age_at_first_chemo", "age_at_surgery", "age_at_first_recurrence", "month_at_first_recurrence") %>% 
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(dataset, "age_at_Dx", "months_at_first_neoadjuvant_chem", "months_at_first_surgery", "months_at_first_adjuvant_chem", 
+         "months_at_first_chemo", "age_at_surgery", "age_at_first_recurrence", "month_at_first_recurrence") %>% 
   tbl_summary(by = dataset,
-              digits = list(everything()~ 2)) %>% 
+              digits = list(everything()~ 2),
+              missing = "no") %>% 
   bold_labels()
 
 # Plot treatment
-radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
+radiomics %>% distinct(mrn, .keep_all = TRUE) %>% 
   ggplot(aes(x= summary_of_rx_1st_course)) + 
   geom_bar()+
   coord_flip()+
   theme_minimal()
 
-radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
+radiomics %>% distinct(mrn, .keep_all = TRUE) %>% 
   ggplot(aes(x= treatment_type)) + 
   geom_bar()+
   coord_flip()+
   theme_minimal()
 
-radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
+radiomics %>% distinct(mrn, .keep_all = TRUE) %>% 
   ggplot(aes(x= debulking_status)) + 
   geom_bar()+
   coord_flip()+
   theme_minimal()
 
 # Table treatment by recurrence
-radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
   select(treatment_type, debulking_status, has_the_patient_recurred_, tnm_stage, summary_of_rx_1st_course) %>% 
   tbl_summary(by = has_the_patient_recurred_, 
               sort = list(everything() ~ "frequency")) %>% 
   bold_labels() %>% add_p()
 
-tbl1 <- radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+tbl1 <- radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
   select(treatment_type, month_at_first_recurrence) %>% 
   tbl_summary(by = treatment_type, 
               digits = list(everything() ~ 2)) %>% 
   bold_labels() %>% add_p()
-tbl2 <- radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+tbl2 <- radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
   select(debulking_status, month_at_first_recurrence) %>% 
   tbl_summary(by = debulking_status, 
               digits = list(everything() ~ 2)) %>% 
   bold_labels() %>% add_p()
-tbl3 <- radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+tbl3 <- radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
   select(tnm_stage, month_at_first_recurrence) %>% 
   tbl_summary(by = tnm_stage, 
               digits = list(everything() ~ 2)) %>% 
   bold_labels() %>% add_p()
-tbl4 <- radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+tbl4 <- radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
   select(summary_of_rx_1st_course, month_at_first_recurrence) %>% 
   tbl_summary(by = summary_of_rx_1st_course, 
               digits = list(everything() ~ 2)) %>% 
@@ -73,7 +74,7 @@ tbl_merge(list(tbl1, tbl2, tbl3, tbl4),
   italicize_levels()
 
 # Table brca by recurrence
-radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
   select(has_the_patient_recurred_, germline_brca1_mutation, germline_brca2_mutation, 
          somatic_brca1_mutation, somatic_brca2_mutation, any_unclassified_brca_mutation) %>%
   tbl_summary(by = has_the_patient_recurred_, 
@@ -82,7 +83,7 @@ radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) 
   bold_labels() %>% add_p()
 
 # Plot brca germline somatic
-radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>% 
+radiomics %>% distinct(mrn, .keep_all = TRUE) %>% 
   select(mrn, germline_brca1_mutation, somatic_brca1_mutation, germline_brca2_mutation, somatic_brca2_mutation) %>% 
   pivot_longer(cols = c(germline_brca1_mutation, somatic_brca1_mutation, germline_brca2_mutation, somatic_brca2_mutation), 
                names_to = "name",values_to = "value") %>%
@@ -91,14 +92,16 @@ radiomics1 %>% distinct(mrn, .keep_all = TRUE) %>%
     str_detect(name, "brca1") ~ "brca1",
     str_detect(name, "brca2") ~ "brca2"
   )) %>% 
-  mutate(name = str_remove_all(name, "_brca1|_brca2|_mutation")) %>% 
-  ggplot(aes(x = brca, fill= name)) + 
-  geom_bar(position = "stack")+
-  coord_flip()+
+  mutate(name = str_remove_all(name, "_brca1|_brca2|_mutation")) %>%
+  group_by(name, brca) %>% 
+  summarise(count=n()) %>%
+  ggplot(aes(x = brca, y= count, fill= name)) + 
+  geom_bar(stat = "identity")+
+  geom_text(aes(label = paste0("n=", count)), size = 3, position = position_stack(vjust = 0.5))+
   theme_minimal()
 
 # table comorbidities
-radiomics1 %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
   mutate(pre_dx_hypertension = ifelse(str_detect(hypertension, "pre"), "hypertension", "no hypertension")) %>% 
   mutate(pre_dx_diabetes = ifelse(str_detect(diabetes_mellitus, "pre"), "diabetes", "no diabetes")) %>% 
   mutate(pre_dx_hypercholesterolemia = ifelse(str_detect(hypercholesterolemia, "pre"), 
@@ -130,15 +133,16 @@ icc(
 
 library(psych) # Koo and Li (2016)
 ICC(ICC_rad)  # between 0.75 and 0.90: good
+ICC(ICC_rad)$results[4,2]
 
 # Correlation ----
 # Test normality
-qqnorm(radiomics1$statistical_mean)
+qqnorm(radiomics$statistical_mean)
 # Pearson
-a <- radiomics1[, 5:310] %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(where(~ any(. != 0)))
 
 mat <- cor(a, use = "pairwise.complete.obs")
-corrplot.mixed(mat, tl.pos = "n")
+# corrplot.mixed(mat, tl.pos = "n")
 
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            # outline.col = "darkblue", # the outline of the circle or square
@@ -155,7 +159,7 @@ ggcorrplot(mat, hc.order = TRUE, method = "circle",
            digits = 2
 )
 
-a <- radiomics1[, 5:310] %>% select(contains("statistical")) %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(contains("statistical")) %>% select(where(~ any(. != 0)))
 mat <- cor(a, use = "pairwise.complete.obs")
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            type = "lower", # show the top half panel
@@ -167,7 +171,7 @@ ggcorrplot(mat, hc.order = TRUE, method = "circle",
            tl.cex = 10, tl.col = "red", tl.srt = 40,
            digits = 2
 )
-a <- radiomics1[, 5:310] %>% select(contains("histogram")) %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(contains("histogram")) %>% select(where(~ any(. != 0)))
 mat <- cor(a, use = "pairwise.complete.obs")
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            type = "lower", # show the top half panel
@@ -179,7 +183,7 @@ ggcorrplot(mat, hc.order = TRUE, method = "circle",
            tl.cex = 10, tl.col = "red", tl.srt = 40,
            digits = 2
 )
-a <- radiomics1[, 5:310] %>% select(contains("fraction")) %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(contains("fraction")) %>% select(where(~ any(. != 0)))
 mat <- cor(a, use = "pairwise.complete.obs")
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            type = "lower", # show the top half panel
@@ -191,7 +195,7 @@ ggcorrplot(mat, hc.order = TRUE, method = "circle",
            tl.cex = 10, tl.col = "red", tl.srt = 40,
            digits = 2
 )
-a <- radiomics1[, 5:310] %>% select(contains("avgcoocurrence")) %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(contains("avgcoocurrence")) %>% select(where(~ any(. != 0)))
 mat <- cor(a, use = "pairwise.complete.obs")
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            type = "lower", # show the top half panel
@@ -203,7 +207,7 @@ ggcorrplot(mat, hc.order = TRUE, method = "circle",
            tl.cex = 10, tl.col = "red", tl.srt = 40,
            digits = 2
 )
-a <- radiomics1[, 5:310] %>% select(contains("avg_3d")) %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(contains("avg_3d")) %>% select(where(~ any(. != 0)))
 mat <- cor(a, use = "pairwise.complete.obs")
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            type = "lower", # show the top half panel
@@ -215,7 +219,7 @@ ggcorrplot(mat, hc.order = TRUE, method = "circle",
            tl.cex = 10, tl.col = "red", tl.srt = 40,
            digits = 2
 )
-a <- radiomics1[, 5:310] %>% select(contains("glszm")) %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(contains("glszm")) %>% select(where(~ any(. != 0)))
 mat <- cor(a, use = "pairwise.complete.obs")
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            type = "lower", # show the top half panel
@@ -227,7 +231,7 @@ ggcorrplot(mat, hc.order = TRUE, method = "circle",
            tl.cex = 10, tl.col = "red", tl.srt = 40,
            digits = 2
 )
-a <- radiomics1[, 5:310] %>% select(contains("ngtdm")) %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(contains("ngtdm")) %>% select(where(~ any(. != 0)))
 mat <- cor(a, use = "pairwise.complete.obs")
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            type = "lower", # show the top half panel
@@ -239,7 +243,7 @@ ggcorrplot(mat, hc.order = TRUE, method = "circle",
            tl.cex = 10, tl.col = "red", tl.srt = 40,
            digits = 2
 )
-a <- radiomics1[, 5:310] %>% select(contains("features")) %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(contains("features")) %>% select(where(~ any(. != 0)))
 mat <- cor(a, use = "pairwise.complete.obs")
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            type = "lower", # show the top half panel
@@ -251,7 +255,7 @@ ggcorrplot(mat, hc.order = TRUE, method = "circle",
            tl.cex = 10, tl.col = "red", tl.srt = 40,
            digits = 2
 )
-a <- radiomics1[, 5:310] %>% select(contains("wavelet")) %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(contains("wavelet")) %>% select(where(~ any(. != 0)))
 mat <- cor(a, use = "pairwise.complete.obs")
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            type = "lower", # show the top half panel
@@ -263,7 +267,7 @@ ggcorrplot(mat, hc.order = TRUE, method = "circle",
            tl.cex = 10, tl.col = "red", tl.srt = 40,
            digits = 2
 )
-a <- radiomics1[, 5:310] %>% select(-matches("statistical|histogram|fraction|avgcoocurrence|avg_3d|glszm|ngtdm|features|wavelet")) %>% select(where(~ any(. != 0)))
+a <- radiomics[, 5:310] %>% select(-matches("statistical|histogram|fraction|avgcoocurrence|avg_3d|glszm|ngtdm|features|wavelet")) %>% select(where(~ any(. != 0)))
 mat <- cor(a, use = "pairwise.complete.obs")
 ggcorrplot(mat, hc.order = TRUE, method = "circle", 
            type = "lower", # show the top half panel
