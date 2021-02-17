@@ -1,12 +1,13 @@
 # Import packages
 library(tidyverse)
-library(scales)
+# library(scales)
 library(lubridate)
 library(data.table)
 library(gtsummary)
 library(gplots)
 library(heatmap.plus)
 library(RColorBrewer)
+library(psych)
 # library(corrplot)
 library(ggcorrplot)
 library(survival)
@@ -19,46 +20,49 @@ capwords <- function(s, strict = FALSE) {
   sapply(strsplit(s, split = " "), cap, USE.NAMES = !is.null(names(s)))
 }
 ################################################################################################# I ### Load data----
-radiomics <- read_csv(paste0("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_01062021.csv")) %>%
-  `colnames<-`(str_remove(colnames(.), "F[0-9]*\\:") %>% tolower() %>% gsub("[()^]", "",.) ) %>% 
-  mutate(rad = "radiom") %>% 
-  group_by(mrn) %>% 
-  mutate(id = cur_group_id()) %>% # %>% str_replace_all(., "\\^", "")
-  ungroup() %>% 
-  mutate(len = nchar(id)) %>% 
-  mutate(zero = 5 - len) %>% 
-  mutate(ii = stringi::stri_dup("0", .$zero)) %>% 
-  select(c(rad, ii, id, mrn, everything())) %>% 
-  unite(patient_id, rad:id, sep = "") %>% 
-  select(c(patient_id, mrn, everything(), -c(len, zero)))
+features <- read_csv(paste0("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_01062021.csv")) %>%
+  `colnames<-`(str_remove(colnames(.), "F[0-9]*\\:") %>% tolower() %>% gsub("[()^]", "",.) %>% str_replace_all(., " ", "_")) # %>% 
+  # mutate(rad = "radiom") %>%
+  # group_by(mrn) %>%
+  # mutate(id = cur_group_id()) %>% # %>% str_replace_all(., "\\^", "")
+  # ungroup() %>%
+  # mutate(len = nchar(id)) %>%
+  # mutate(zero = 5 - len) %>%
+  # mutate(ii = stringi::stri_dup("0", .$zero)) %>%
+  # select(c(rad, ii, id, mrn, everything())) %>%
+  # unite(patient_id, rad:id, sep = "") %>%
+  # select(c(patient_id, mrn, everything(), -c(len, zero)))
 
-ID_linkage <- radiomics %>% select(c(mrn, patient_id))
-radiomics <- radiomics %>% select(-mrn)
-colnames(radiomics)[54]
+# ID_linkage <- features %>% select(c(mrn, patient_id)) %>% distinct(patient_id, .keep_all = TRUE)
+# write_csv(ID_linkage, "ID_linkage.csv")
+ID_linkage <- read_csv("ID_linkage.csv")
+features <- features %>%
+  left_join(ID_linkage, ., by = "mrn") %>% select(-mrn)
+colnames(features)[54]
 
 clinical <- readxl::read_xls("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/radiomic_CT_final.xls") %>% 
   `colnames<-`(str_remove(colnames(.), "_Cancer_Registry|_CS__Mixed_Group") %>%
                  str_replace_all( "__", "_") %>%
                  tolower()) %>%
   rename(Gender = "gender", Race = "race", Ethnicity = "ethnicity", Histology = "histology") %>% 
-  left_join(ID_linkage, ., by = "mrn") %>% 
-  select(-mrn)
-
-################################################################################################# II ### Radiomics----
-summary(radiomics)
-class(radiomics) <- "data.frame"
-# scale data from -1 to 1
-for(i in 1:length(colnames(radiomics))) {
-  if(class(radiomics[,i]) == "numeric" | class(radiomics[,i]) == "integer") {
-    radiomics[,i] <- rescale(radiomics[,i], to=c(-1,1)) }
-}
-summary(radiomics)
-
-################################################################################################# III ### Clinical----
-clinical <- clinical %>% 
   mutate(across(where(is.character), .fns = ~ tolower(.))) %>%
   mutate(across(where(is.character), .fns = ~ capwords(.))) %>%
   mutate(across(where(is.character), .fns = ~ str_replace(., "Unknown|unknown|NANA", NA_character_))) %>%
+  left_join(ID_linkage, ., by = "mrn") %>% 
+  select(-mrn)
+
+################################################################################################# II ### Features----
+summary(features)
+class(features) <- "data.frame"
+# scale data from -1 to 1
+for(i in 1:length(colnames(features))) {
+  if(class(features[,i]) == "numeric" | class(features[,i]) == "integer") {
+    features[,i] <- scales::rescale(features[,i], to=c(-1,1)) }
+}
+summary(features)
+
+################################################################################################# III ### Clinical----
+clinical <- clinical %>% 
   # For summary stats
   mutate(age_at_Dx = round(interval(start = date_of_birth, end = date_of_diagnosis)/
                              duration(n=1, units = "years"), 2)) %>% 
@@ -108,14 +112,22 @@ clinical <- clinical %>%
   mutate(months_of_chem_rec_free = round(interval(start = first_chemo_date, end = recurrence_date)/
                                              duration(n=1, units = "months"), 2)) %>% 
   mutate(months_of_treat_rec_free = round(interval(start = first_treatment_date, end = recurrence_date)/
-                                             duration(n=1, units = "months"), 2))
-
- 
-
+                                             duration(n=1, units = "months"), 2)) %>% 
+  mutate(recurrence_date_after_surgery = case_when(
+    date_of_first_recurrence > date_of_first_surgery    ~ date_of_first_recurrence,
+    TRUE                                                ~ NA_POSIXct_
+  )) %>% 
+  mutate(has_the_patient_recurred_after_surg = ifelse(!is.na(recurrence_date_after_surgery), "Recurrence", "No Recurrence")) %>% 
+  mutate(has_the_patient_recurred_ = case_when(
+    has_the_patient_recurred_ == "Yes"          ~ "Recurrence",
+    has_the_patient_recurred_ == "No"           ~ "No Recurrence"
+  )) %>% 
+  mutate(debulking_status = 
+           str_remove(debulking_status, 
+                      " \\(.*"))
 
 
 ################################################################################################# IV ### Bind df----
 
-radiomics <- full_join(radiomics, clinical, by = "patient_id") %>% 
+radiomics <- full_join(features, clinical, by = "patient_id") %>% 
   filter(!is.na(lesion_id))
-  
