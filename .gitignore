@@ -16,7 +16,6 @@
 
 # Rmd and pptx
 *.pptx
-*.Rmd
 
 # Example code in progress
 *-Ex.R
