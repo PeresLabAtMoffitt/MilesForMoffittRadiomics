@@ -122,10 +122,21 @@ clinical <- clinical %>%
     has_the_patient_recurred_ == "Yes"          ~ "Recurrence",
     has_the_patient_recurred_ == "No"           ~ "No Recurrence"
   )) %>% 
+  mutate(recurremce = case_when(
+    has_the_patient_recurred_ == "Recurrence"          ~ 1,
+    has_the_patient_recurred_ == "No Recurrence"           ~ 0
+  )) %>% 
+  mutate(preDx_comorbidities = case_when(
+    str_detect(hypertension, "pre|Pre") |
+      str_detect(diabetes_mellitus, "pre|Pre") |
+      str_detect(hypercholesterolemia, "pre|Pre") |
+      str_detect(chronic_kidney_disease, "pre|Pre") |
+      str_detect(cardiac_conditions_including_bu, "pre|Pre")        ~ "Comorbidities",
+    TRUE                                                            ~ "No comorbidities"
+  )) %>% 
   mutate(debulking_status = 
            str_remove(debulking_status, 
                       " \\(.*"))
-
 
 ################################################################################################# IV ### Bind df----
 

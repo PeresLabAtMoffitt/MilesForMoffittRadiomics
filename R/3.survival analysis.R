@@ -245,3 +245,15 @@ ggsurvplot(survfit(Surv(months_of_dx_rec_free, rec_event) ~ treatment_type, data
            # # legend.labs=c("upfront neoadjuvant", "upfront surgery")
            )
 
+### glm ----
+
+model <- glm(recurremce ~ treatment_type + preDx_comorbidities + age_at_Dx + Race + tnm_stage + debulking_status, data = radiomics, family = binomial)
+summary(model)
+tbl1 <- tbl_regression(model)
+tbl2 <- tbl_regression(model, exponentiate = TRUE)
+tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Estimate**", "**Exp**"))
+exp(cbind(OR = coef(model), confint(model)))
+
+
+
+

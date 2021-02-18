@@ -139,12 +139,12 @@ radiomics %>% distinct(patient_id, .keep_all = TRUE) %>%
 
 # table comorbidities
 radiomics %>% mutate(dataset = "Patients") %>% distinct(patient_id, .keep_all = TRUE) %>% 
-  mutate(pre_dx_hypertension = ifelse(str_detect(hypertension, "pre"), "hypertension", "no hypertension")) %>% 
-  mutate(pre_dx_diabetes = ifelse(str_detect(diabetes_mellitus, "pre"), "diabetes", "no diabetes")) %>% 
-  mutate(pre_dx_hypercholesterolemia = ifelse(str_detect(hypercholesterolemia, "pre"), 
+  mutate(pre_dx_hypertension = ifelse(str_detect(hypertension, "pre|Pre"), "hypertension", "no hypertension")) %>% 
+  mutate(pre_dx_diabetes = ifelse(str_detect(diabetes_mellitus, "pre|Pre"), "diabetes", "no diabetes")) %>% 
+  mutate(pre_dx_hypercholesterolemia = ifelse(str_detect(hypercholesterolemia, "pre|Pre"), 
                                               "hypercholesterolemia", "no hypercholesterolemia")) %>% 
-  mutate(pre_dx_CKd = ifelse(str_detect(chronic_kidney_disease, "pre"), "CKd", "no CKd")) %>% 
-  mutate(pre_dx_cardiac_conditions = ifelse(str_detect(cardiac_conditions_including_bu, "pre"), 
+  mutate(pre_dx_CKd = ifelse(str_detect(chronic_kidney_disease, "pre|Pre"), "CKd", "no CKd")) %>% 
+  mutate(pre_dx_cardiac_conditions = ifelse(str_detect(cardiac_conditions_including_bu, "pre|Pre"), 
                                             "cardiac conditions", "no cardiac conditions")) %>% 
   select("has_the_patient_recurred_", "pre_dx_hypertension", "pre_dx_diabetes",
          "pre_dx_hypercholesterolemia", "pre_dx_CKd", "pre_dx_cardiac_conditions") %>%
@@ -152,16 +152,16 @@ radiomics %>% mutate(dataset = "Patients") %>% distinct(patient_id, .keep_all = 
               sort = list(everything() ~ "frequency"),
               missing = "no") %>%
   # modify_spanning_header(starts_with("stat_") ~ "**Randomization Assignment**")
-  bold_labels() %>% add_p()
+  bold_labels() %>% add_p() %>% add_overall()
   # show_header_names(a)
 
 radiomics %>% mutate(dataset = "Patients") %>% distinct(patient_id, .keep_all = TRUE) %>% 
-  mutate(pre_dx_hypertension = ifelse(str_detect(hypertension, "pre"), "hypertension", "no hypertension")) %>% 
-  mutate(pre_dx_diabetes = ifelse(str_detect(diabetes_mellitus, "pre"), "diabetes", "no diabetes")) %>% 
-  mutate(pre_dx_hypercholesterolemia = ifelse(str_detect(hypercholesterolemia, "pre"), 
+  mutate(pre_dx_hypertension = ifelse(str_detect(hypertension, "pre|Pre"), "hypertension", "no hypertension")) %>% 
+  mutate(pre_dx_diabetes = ifelse(str_detect(diabetes_mellitus, "pre|Pre"), "diabetes", "no diabetes")) %>% 
+  mutate(pre_dx_hypercholesterolemia = ifelse(str_detect(hypercholesterolemia, "pre|Pre"), 
                                               "hypercholesterolemia", "no hypercholesterolemia")) %>% 
-  mutate(pre_dx_CKd = ifelse(str_detect(chronic_kidney_disease, "pre"), "CKd", "no CKd")) %>% 
-  mutate(pre_dx_cardiac_conditions = ifelse(str_detect(cardiac_conditions_including_bu, "pre"), 
+  mutate(pre_dx_CKd = ifelse(str_detect(chronic_kidney_disease, "pre|Pre"), "CKd", "no CKd")) %>% 
+  mutate(pre_dx_cardiac_conditions = ifelse(str_detect(cardiac_conditions_including_bu, "pre|Pre"), 
                                             "cardiac conditions", "no cardiac conditions")) %>% 
   select(treatment_type, "pre_dx_hypertension", "pre_dx_diabetes",
          "pre_dx_hypercholesterolemia", "pre_dx_CKd", "pre_dx_cardiac_conditions") %>%
@@ -169,7 +169,7 @@ radiomics %>% mutate(dataset = "Patients") %>% distinct(patient_id, .keep_all = 
               sort = list(everything() ~ "frequency"),
               missing = "no") %>%
   # modify_spanning_header(starts_with("stat_") ~ "**Randomization Assignment**")
-  bold_labels() %>% add_p() %>%  add_n()
+  bold_labels() %>% add_p() %>% add_overall()
   
 ################################################################################################# II ### Radiomics mining----
 # ICC
@@ -457,12 +457,23 @@ condition_colors <- unlist(lapply(rownames(df2), function(x){
          ))))))))
 }))
 
+par(oma=c(1,0.1,1,1))
 heatmap.2(df2, main = "",
           
-          trace = "none", density="none", col=bluered(20), cexRow=1, cexCol = 1, 
-          margins = c(10,5), # bottom, right
+          trace = "none", density="none", col=colorRampPalette(brewer.pal(8, "RdYlBu"))(25), cexRow=1, cexCol = 1, 
+          lwid=c(2, 10), # lhei change size of the top dend, lwid change the left dend
+          margins = c(10,10), # bottom, right
           RowSideColors = condition_colors,
           scale = "column")
+clu <- heatmap.2(df2)
+
+hc <- as.hclust( clu$rowDendrogram )
+cut <- cutree( hc, h=10 )
+plot(cut)
+
+hc.rows<- hclust(dist(df2))
+plot(hc.rows) 
 
 
 
+rect.hclust(hc.rows, h=10)
