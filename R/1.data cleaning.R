@@ -120,8 +120,8 @@ clinical_cleaning <- function(data) {
     )) %>%
     mutate(has_the_patient_recurred_after_surg = ifelse(!is.na(recurrence_date_after_surgery), "Recurrence", "No Recurrence")) %>%
     mutate(has_the_patient_recurred_ = case_when(
-      has_the_patient_recurred_ == "Yes"          ~ "Recurrence",
-      has_the_patient_recurred_ == "No"           ~ "No Recurrence"
+      str_detect(has_the_patient_recurred_, "Yes|yes")          ~ "Recurrence",
+      str_detect(has_the_patient_recurred_, "No|no")           ~ "No Recurrence"
     )) %>%
     mutate(recurremce = case_when(
       has_the_patient_recurred_ == "Recurrence"          ~ 1,

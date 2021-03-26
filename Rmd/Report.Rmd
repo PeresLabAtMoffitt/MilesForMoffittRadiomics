@@ -1,0 +1,659 @@
+---
+title: "Radiomics cleaning data report"
+author: "Christelle Colin-Leitzinger"
+date: "2/12/2021"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: false
+    theme: darkly #cerulean
+    highlight: pygments
+    df_print: paged
+---
+
+<style type="text/css">
+.figure {
+   margin-top: 25px;
+   <!-- margin-bottom: 100px; -->
+}
+
+table {
+    margin-top: 25px;
+    <!-- margin-bottom: 100px !important; -->
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE,
+                      cache = FALSE,
+                      # fig.width = 7, fig.height = 5, 
+                      fig.align='center'#, fig.show='hold'
+                      )
+options(gtsummary.print_engine = "gt")
+options(gtsummary.as_gt.addl_cmds = "gt::tab_options(table.font.size = 14, data_row.padding = gt::px(1))")
+```
+
+```{r library}
+library(tidyverse)
+# library(scales)
+library(lubridate)
+library(data.table)
+library(gtsummary)
+library(gplots)
+library(heatmap.plus)
+library(RColorBrewer)
+library(psych)
+# library(corrplot)
+library(ggcorrplot)
+library(survival)
+library(survminer)
+```
+
+# Report Radiomics project
+<br>
+<br>
+<!-- Leave a space here -->
+
+***
+## I.Radiomics
+
+```{r radiomics}
+radiomics <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/radiomics.rds")
+features <- radiomics %>% 
+  select(mrn, lesionid, starts_with("nor"))
+# class(features) <- "data.frame"
+```
+
+We have radiomics data on `r length(unique(features$mrn))` patients.
+
+```{r features1}
+head(features)
+```
+
+Here a summary after rescaling the data from -1 to 1.
+
+```{r features3}
+summary(features)
+```
+<br>
+<br>
+<!-- Leave a space here -->
+
+***
+## II.Clinical
+Here a quick look at the clinical data
+```{r clinical}
+# head(clinical)
+```
+<br>
+<br>
+<!-- Leave a space here -->
+
+### 1.Demographics
+Some cleanup needs to be done here to combined multiple race_cancer_registry, ethnicity_cancer_registry and others. Let me know how you would prefer them!
+```{r demo}
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(dataset, race_cancer_registry, ethnicity_cancer_registry, primary_site, histology, 
+         tnm_cs__mixed_group_stage, vital_new, age_at_diagnosis, age_at_Dx,
+         has_the_patient_recurred_, germline_brca1_mutation, germline_brca2_mutation, 
+         somatic_brca1_mutation, somatic_brca2_mutation) %>% 
+  tbl_summary(by = dataset, 
+              sort = list(everything() ~ "frequency", tnm_cs__mixed_group_stage ~ "alphanumeric")) %>% 
+  bold_labels()
+```
+<br>
+<br>
+<!-- Leave a space here -->
+
+### 2.Treatment
+Some variable will need to be combined here like Surg/chem and Surg/horm in summary_of_rx__1st_course variable.
+
+<div class = "row">
+<div class = "col-md-6">
+```{r treatment}
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment__type, summary_of_rx__1st_course, summary_of_rx__1st_course__at_t) %>% 
+  tbl_summary(sort = list(everything() ~ "frequency")) %>% 
+  bold_labels()
+```
+</div>
+
+<div class = "col-md-6">
+```{r treatment22}
+radiomics %>% distinct(mrn, .keep_all = TRUE) %>% 
+  ggplot(aes(x= debulking_status)) + 
+  geom_bar()+
+  coord_flip()+
+  theme_minimal(base_size = 20)
+```
+</div>
+</div>
+
+<div class = "row">
+<div class = "col-md-6">
+```{r treatment21}
+radiomics %>% distinct(mrn, .keep_all = TRUE) %>% 
+  ggplot(aes(x= treatment__type)) + 
+  geom_bar()+
+  coord_flip()+
+  theme_minimal(base_size = 20)
+```
+</div>
+
+<div class = "col-md-6">
+```{r treatment23}
+radiomics %>% distinct(mrn, .keep_all = TRUE) %>% 
+  ggplot(aes(x= summary_of_rx__1st_course)) + 
+  geom_bar()+
+  coord_flip()+
+  theme_minimal(base_size = 20)
+```
+</div>
+</div>
+
+```{r treatment demo}
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment__type, race_cancer_registry, ethnicity_cancer_registry, 
+         primary_site, histology, tnm_cs__mixed_group_stage) %>% 
+  tbl_summary(by = treatment__type, 
+              sort = list(everything() ~ "frequency", tnm_cs__mixed_group_stage ~ "alphanumeric")) %>% 
+  bold_labels() %>% add_p() %>% add_overall()
+```
+
+```{r treatment24}
+# Table treatment
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment__type, summary_of_rx__1st_course, debulking_status) %>% 
+  tbl_summary(by = treatment__type, 
+              sort = list(everything() ~ "frequency")) %>% 
+  bold_labels() %>% add_p() %>% add_overall()
+```
+
+<br>
+<br>
+<!-- Leave a space here -->
+
+### 3.Treatment and outcomes
+
+```{r treatment1}
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment__type, "age_at_Dx", "months_at_first_neoadjuvant_chem", "months_at_first_surgery", "months_at_first_adjuvant_chem", 
+         "months_at_first_chemo", "age_at_surgery", "age_at_first_recurrence", "month_at_first_recurrence", vital_new) %>% 
+  tbl_summary(by = treatment__type,
+              digits = list(everything()~ 2),
+              missing = "no") %>% 
+  bold_labels() %>% add_n() %>% add_overall()
+```
+
+<br>
+<br>
+<!-- Leave a space here -->
+
+### 4.Recurrence
+
+```{r recurrence}
+# Table treatment by recurrence
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment__type, debulking_status, has_the_patient_recurred_, tnm_cs__mixed_group_stage, summary_of_rx__1st_course) %>% 
+  tbl_summary(by = has_the_patient_recurred_, 
+              sort = list(everything() ~ "frequency")) %>% 
+  bold_labels() %>% add_p() %>% add_overall()
+
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment__type, has_the_patient_recurred_) %>% 
+  tbl_summary(by = treatment__type, 
+              sort = list(everything() ~ "frequency")) %>% 
+  bold_labels() %>% add_p()
+```
+
+Here I added a new variable to look at recurrence after surgery
+```{r recurrence1}
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment__type, has_the_patient_recurred_after_surg) %>% 
+  tbl_summary(by = treatment__type, 
+              sort = list(everything() ~ "frequency")) %>% 
+  bold_labels() %>% add_p()
+
+
+tbl1 <- radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment__type, month_at_first_recurrence) %>% 
+  tbl_summary(by = treatment__type, 
+              digits = list(everything() ~ 2)) %>% 
+  bold_labels() %>% add_p()
+tbl2 <- radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(debulking_status, month_at_first_recurrence) %>% 
+  tbl_summary(by = debulking_status, 
+              digits = list(everything() ~ 2)) %>% 
+  bold_labels() %>% add_p()
+tbl3 <- radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(tnm_cs__mixed_group_stage, month_at_first_recurrence) %>% 
+  tbl_summary(by = tnm_cs__mixed_group_stage, 
+              digits = list(everything() ~ 2)) %>% 
+  bold_labels() %>% add_p()
+tbl4 <- radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(summary_of_rx__1st_course, month_at_first_recurrence) %>% 
+  tbl_summary(by = summary_of_rx__1st_course, 
+              digits = list(everything() ~ 2)) %>% 
+  bold_labels() %>% add_p()
+
+tbl_merge(list(tbl1, tbl2, tbl3, tbl4),
+          tab_spanner = c("**treatment__type**", "**debulking_status**", "**tnm_cs__mixed_group_stage**", "**summary_of_rx__1st_course**")) %>%
+  bold_labels() %>%
+  italicize_levels()
+```
+<br>
+<br>
+<!-- Leave a space here -->
+
+### 5.BRCA & Recurrence
+
+```{r brca}
+# Plot brca germline somatic
+radiomics %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(mrn, germline_brca1_mutation, somatic_brca1_mutation, germline_brca2_mutation, somatic_brca2_mutation) %>% 
+  pivot_longer(cols = c(germline_brca1_mutation, somatic_brca1_mutation, germline_brca2_mutation, somatic_brca2_mutation), 
+               names_to = "name",values_to = "value") %>%
+  filter(value == "Yes") %>% 
+  mutate(brca = case_when(
+    str_detect(name, "brca1") ~ "brca1",
+    str_detect(name, "brca2") ~ "brca2"
+  )) %>% 
+  mutate(name = str_remove_all(name, "_brca1|_brca2|_mutation")) %>%
+  group_by(name, brca) %>% 
+  summarise(count=n()) %>%
+  ggplot(aes(x = brca, y= count, fill= name)) + 
+  geom_bar(stat = "identity")+
+  geom_text(aes(label = paste0("n=", count)), size = 3, position = position_stack(vjust = 0.5))+
+  theme_minimal()
+
+# Table brca by recurrence
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(has_the_patient_recurred_, germline_brca1_mutation, germline_brca2_mutation, 
+         somatic_brca1_mutation, somatic_brca2_mutation, any__unclassified__brca_mutation) %>%
+  tbl_summary(by = has_the_patient_recurred_, 
+              sort = list(everything() ~ "frequency"),
+              missing = "no") %>% 
+  bold_labels() %>% add_p() %>% add_overall()
+
+# Table brca by treatment
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  select(treatment__type, germline_brca1_mutation, germline_brca2_mutation, 
+         somatic_brca1_mutation, somatic_brca2_mutation, any__unclassified__brca_mutation) %>%
+  tbl_summary(by = treatment__type, 
+              sort = list(everything() ~ "frequency"),
+              missing = "no") %>% 
+  bold_labels() %>% add_p() %>% add_overall()
+```
+<br>
+<br>
+<!-- Leave a space here -->
+
+### 6.Comorbidities
+```{r}
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  mutate(pre_dx_hypertension = ifelse(str_detect(hypertension, "pre|Pre"), "hypertension", "no hypertension")) %>% 
+  mutate(pre_dx_diabetes = ifelse(str_detect(diabetes_mellitus, "pre|Pre"), "diabetes", "no diabetes")) %>% 
+  mutate(pre_dx_hypercholesterolemia = ifelse(str_detect(hypercholesterolemia, "pre|Pre"), 
+                                              "hypercholesterolemia", "no hypercholesterolemia")) %>% 
+  mutate(pre_dx_CKd = ifelse(str_detect(chronic_kidney_disease, "pre|Pre"), "CKd", "no CKd")) %>% 
+  mutate(pre_dx_cardiac_conditions = ifelse(str_detect(cardiac_conditions_including_bu, "pre|Pre"), 
+                                            "cardiac conditions", "no cardiac conditions")) %>% 
+  select("has_the_patient_recurred_", "pre_dx_hypertension", "pre_dx_diabetes",
+         "pre_dx_hypercholesterolemia", "pre_dx_CKd", "pre_dx_cardiac_conditions") %>%
+  tbl_summary(by = has_the_patient_recurred_, 
+              sort = list(everything() ~ "frequency"),
+              missing = "no") %>%
+  # modify_spanning_header(starts_with("stat_") ~ "**Randomization Assignment**")
+  bold_labels() %>% add_p() %>% add_overall()
+  # show_header_names(a)
+
+radiomics %>% mutate(dataset = "Patients") %>% distinct(mrn, .keep_all = TRUE) %>% 
+  mutate(pre_dx_hypertension = ifelse(str_detect(hypertension, "pre|Pre"), "hypertension", "no hypertension")) %>% 
+  mutate(pre_dx_diabetes = ifelse(str_detect(diabetes_mellitus, "pre|Pre"), "diabetes", "no diabetes")) %>% 
+  mutate(pre_dx_hypercholesterolemia = ifelse(str_detect(hypercholesterolemia, "pre|Pre"), 
+                                              "hypercholesterolemia", "no hypercholesterolemia")) %>% 
+  mutate(pre_dx_CKd = ifelse(str_detect(chronic_kidney_disease, "pre|Pre"), "CKd", "no CKd")) %>% 
+  mutate(pre_dx_cardiac_conditions = ifelse(str_detect(cardiac_conditions_including_bu, "pre|Pre"), 
+                                            "cardiac conditions", "no cardiac conditions")) %>% 
+  select(treatment__type, "pre_dx_hypertension", "pre_dx_diabetes",
+         "pre_dx_hypercholesterolemia", "pre_dx_CKd", "pre_dx_cardiac_conditions") %>%
+  tbl_summary(by = treatment__type, 
+              sort = list(everything() ~ "frequency"),
+              missing = "no") %>%
+  # modify_spanning_header(starts_with("stat_") ~ "**Randomization Assignment**")
+  bold_labels() %>% add_p() %>% add_overall()
+```
+<br>
+<br>
+<!-- Leave a space here -->
+
+***
+## III.Survivals
+The legend are long and will be adjusted later.
+
+### 1.General
+<div class = "row">
+<div class = "col-md-6">
+```{r, fig.height = 7}
+radiomics_surv <- radiomics %>% distinct(mrn, .keep_all = TRUE)
+# From Dx
+# overall survival by 4 trt groups
+ggsurvplot(survfit(Surv(months_at_dx_followup, os_event) ~ treatment__type, data=radiomics_surv),
+           title = "Overall survival from date of diagnosis", 
+           font.main = c(18, "bold", "black"), 
+           font.x = c(16, "bold", "black"), font.y = c(16, "bold", "black"), 
+           font.legend = c(12, "bold", "black"), font.tickslab = c(14, "bold", "black"),
+           size = 1.5,
+           
+           pval=TRUE, palette = c("black", "green","blue", "red"),
+           # Add risk table
+           risk.table = "abs_pct", risk.table.title = "Risk table (count(%))",
+           risk.table.y.text = FALSE, risk.table.fontsize = 4,tables.height = 0.25,
+           tables.theme = theme_survminer(base_size = 8,
+                                          font.main = c(16, "bold", "black"),
+                                          font.x = c(16, "bold", "black"),
+                                          font.y = c(16, "bold", "transparent"),
+                                          font.tickslab = c(13, "bold", "black")
+           ),
+           
+           legend.title = "", xlab = "Time (in months)", ylab="Survival Probability"  
+           # # legend.labs=c("chemo only", "surgery only", "upfront neoadjuvant", "upfront surgery")
+           ) + guides(colour = guide_legend(nrow = 2))
+```
+</div>
+
+<div class = "col-md-6">
+```{r, fig.height = 7}
+# recurrence free survival by 4 trt groups
+ggsurvplot(survfit(Surv(months_of_dx_rec_free, rec_event) ~ treatment__type, data=radiomics_surv),
+           title = "Recurrence free survival from date of diagnosis", 
+           font.main = c(18, "bold", "black"), 
+           font.x = c(16, "bold", "black"), font.y = c(16, "bold", "black"), 
+           font.legend = c(12, "bold", "black"), font.tickslab = c(14, "bold", "black"), 
+           size = 1.5,
+           
+           pval=TRUE, palette = c("black", "green","blue", "red"), 
+           # Add risk table
+           risk.table = "abs_pct", risk.table.title = "Risk table (count(%))",
+           risk.table.y.text = FALSE, risk.table.fontsize = 4,tables.height = 0.25,
+           tables.theme = theme_survminer(base_size = 8,
+                                          font.main = c(16, "bold", "black"),
+                                          font.x = c(16, "bold", "black"),
+                                          font.y = c(16, "bold", "transparent"),
+                                          font.tickslab = c(13, "bold", "black")
+           ),
+           
+           legend.title = "", xlab = "Time (in months)", ylab="Recurrence Probability"  
+           # legend.labs=c("chemo only", "surgery only", "upfront neoadjuvant", "upfront surgery")
+           ) + guides(colour = guide_legend(nrow = 2))
+```
+</div>
+</div>
+
+### 2.From surgery
+<div class = "row">
+<div class = "col-md-6">
+```{r, fig.height = 7}
+# 
+# overall survival calculated from date of upfront surgery 
+ggsurvplot(survfit(Surv(months_at_surg_followup, os_event) ~ treatment__type, data=radiomics_surv), 
+           title = "Overall survival from date of upfront surgery", 
+           font.main = c(18, "bold", "black"), 
+           font.x = c(16, "bold", "black"), font.y = c(16, "bold", "black"), 
+           font.legend = c(12, "bold", "black"), font.tickslab = c(14, "bold", "black"), 
+           size = 1.5,
+           
+           pval=TRUE, palette = c("black", "green","blue", "red"), 
+           # Add risk table
+           risk.table = "abs_pct", risk.table.title = "Risk table (count(%))",
+           risk.table.y.text = FALSE, risk.table.fontsize = 4,tables.height = 0.25,
+           tables.theme = theme_survminer(base_size = 8,
+                                          font.main = c(16, "bold", "black"),
+                                          font.x = c(16, "bold", "black"),
+                                          font.y = c(16, "bold", "transparent"),
+                                          font.tickslab = c(13, "bold", "black")
+           ),
+           
+           legend.title = "", xlab = "Time (in months)", ylab="Survival Probability"#,  
+           # # legend.labs=c("chemo only", "surgery only", "upfront neoadjuvant", "upfront surgery")
+           ) + guides(colour = guide_legend(nrow = 2))
+```
+</div>
+
+<div class = "col-md-6">
+```{r, fig.height = 7}
+# recurrence free survival calculated from date of upfront surgery 
+ggsurvplot(survfit(Surv(months_of_surg_rec_free, rec_event) ~ treatment__type, data=radiomics_surv),
+           title = "Recurrence free survival from date of upfront surgery ", 
+           font.main = c(18, "bold", "black"), 
+           font.x = c(16, "bold", "black"), font.y = c(16, "bold", "black"), 
+           font.legend = c(12, "bold", "black"), font.tickslab = c(14, "bold", "black"), 
+           size = 1.5,
+           
+           pval=TRUE, palette = c("black", "green","blue", "red"), 
+           # Add risk table
+           risk.table = "abs_pct", risk.table.title = "Risk table (count(%))",
+           risk.table.y.text = FALSE, risk.table.fontsize = 4,tables.height = 0.25,
+           tables.theme = theme_survminer(base_size = 8,
+                                          font.main = c(16, "bold", "black"),
+                                          font.x = c(16, "bold", "black"),
+                                          font.y = c(16, "bold", "transparent"),
+                                          font.tickslab = c(13, "bold", "black")
+           ),
+           
+           legend.title = "", xlab = "Time (in months)", ylab="Recurrence Probability"#,  
+           # # legend.labs=c("chemo only", "surgery only", "upfront neoadjuvant", "upfront surgery")
+) + guides(colour = guide_legend(nrow = 2))
+```
+</div>
+</div>
+
+### 3.From neoadjuvant
+<div class = "row">
+<div class = "col-md-6">
+```{r, fig.height = 7}
+# 
+# overall survival calculated from date of neoadjuvant 
+ggsurvplot(survfit(Surv(months_at_neo_followup, os_event) ~ treatment__type, data=radiomics_surv),
+           title = "Overall survival from date of neoadjuvant", 
+           font.main = c(18, "bold", "black"), 
+           font.x = c(16, "bold", "black"), font.y = c(16, "bold", "black"), 
+           font.legend = c(12, "bold", "black"), font.tickslab = c(14, "bold", "black"), 
+           size = 1.5,
+           
+           pval=TRUE, palette = c("black", "green","blue", "red"), 
+           # Add risk table
+           risk.table = "abs_pct", risk.table.title = "Risk table (count(%))",
+           risk.table.y.text = FALSE, risk.table.fontsize = 4,tables.height = 0.25,
+           tables.theme = theme_survminer(base_size = 8,
+                                          font.main = c(16, "bold", "black"),
+                                          font.x = c(16, "bold", "black"),
+                                          font.y = c(16, "bold", "transparent"),
+                                          font.tickslab = c(13, "bold", "black")
+           ),
+           
+           legend.title = "", xlab = "Time (in months)", ylab="Survival Probability"#,  
+           # # legend.labs=c("chemo only", "surgery only", "upfront neoadjuvant", "upfront surgery")
+) + guides(colour = guide_legend(nrow = 2))
+```
+</div>
+
+<div class = "col-md-6">
+```{r, fig.height = 7}
+# recurrence free survival calculated from date of neoadjuvant 
+ggsurvplot(survfit(Surv(months_of_neo_rec_free, rec_event) ~ treatment__type, data=radiomics_surv),
+           title = "Recurrence free survival from date of neoadjuvant", 
+           font.main = c(18, "bold", "black"), 
+           font.x = c(16, "bold", "black"), font.y = c(16, "bold", "black"), 
+           font.legend = c(12, "bold", "black"), font.tickslab = c(14, "bold", "black"),
+           size = 1.5,
+           
+           pval=TRUE, palette = c("black", "green","blue", "red"), 
+           # Add risk table
+           risk.table = "abs_pct", risk.table.title = "Risk table (count(%))",
+           risk.table.y.text = FALSE, risk.table.fontsize = 4,tables.height = 0.25,
+           tables.theme = theme_survminer(base_size = 8,
+                                          font.main = c(16, "bold", "black"),
+                                          font.x = c(16, "bold", "black"),
+                                          font.y = c(16, "bold", "transparent"),
+                                          font.tickslab = c(13, "bold", "black")
+           ),
+           
+           legend.title = "", xlab = "Time (in months)", ylab="Recurrence Probability"#,  
+           # # legend.labs=c("chemo only", "surgery only", "upfront neoadjuvant", "upfront surgery")
+) + guides(colour = guide_legend(nrow = 2))
+```
+</div>
+</div>
+
+### 4.From treatment
+<div class = "row">
+<div class = "col-md-6">
+```{r, fig.height = 7}
+# 
+# overall survival calculated from date of treatment 
+ggsurvplot(survfit(Surv(months_at_treat_followup, os_event) ~ treatment__type, data=radiomics_surv),
+           title = "Overall survival from date of treatment", 
+           font.main = c(18, "bold", "black"), 
+           font.x = c(16, "bold", "black"), font.y = c(16, "bold", "black"), 
+           font.legend = c(12, "bold", "black"), font.tickslab = c(14, "bold", "black"), 
+           size = 1.5,
+           
+           pval=TRUE, palette = c("black", "green","blue", "red"), 
+           # Add risk table
+           risk.table = "abs_pct", risk.table.title = "Risk table (count(%))",
+           risk.table.y.text = FALSE, risk.table.fontsize = 4,tables.height = 0.25,
+           tables.theme = theme_survminer(base_size = 8,
+                                          font.main = c(16, "bold", "black"),
+                                          font.x = c(16, "bold", "black"),
+                                          font.y = c(16, "bold", "transparent"),
+                                          font.tickslab = c(13, "bold", "black")
+           ),
+           
+           legend.title = "", xlab = "Time (in months)", ylab="Survival Probability"#,  
+           # # legend.labs=c("chemo only", "surgery only", "upfront neoadjuvant", "upfront surgery")
+) + guides(colour = guide_legend(nrow = 2))
+```
+</div>
+
+<div class = "col-md-6">
+```{r, fig.height = 7}
+# recurrence free survival calculated from date of treatment 
+ggsurvplot(survfit(Surv(months_of_treat_rec_free, rec_event) ~ treatment__type, data=radiomics_surv),
+           title = "Recurrence free survival from date of treatment", 
+           font.main = c(18, "bold", "black"), 
+           font.x = c(16, "bold", "black"), font.y = c(16, "bold", "black"), 
+           font.legend = c(12, "bold", "black"), font.tickslab = c(14, "bold", "black"), 
+           size = 1.5,
+           
+           pval=TRUE, palette = c("black", "green","blue", "red"), 
+           # Add risk table
+           risk.table = "abs_pct", risk.table.title = "Risk table (count(%))",
+           risk.table.y.text = FALSE, risk.table.fontsize = 4,tables.height = 0.25,
+           tables.theme = theme_survminer(base_size = 8,
+                                          font.main = c(16, "bold", "black"),
+                                          font.x = c(16, "bold", "black"),
+                                          font.y = c(16, "bold", "transparent"),
+                                          font.tickslab = c(13, "bold", "black")
+           ),
+           
+           legend.title = "", xlab = "Time (in months)", ylab="Recurrence Probability"#,  
+           # # legend.labs=c("chemo only", "surgery only", "upfront neoadjuvant", "upfront surgery")
+) + guides(colour = guide_legend(nrow = 2))
+```
+</div>
+</div>
+
+### 5.In stage3/4 group
+<div class = "row">
+<div class = "col-md-6">
+```{r, fig.height = 7}
+restricted_stage_trt_type_ <- radiomics_surv %>% filter(str_detect(tnm_cs__mixed_group_stage, "3|4"))
+# overall survival in stage3/4 group of patients by upfront noeadj vs. upfront surgery groups
+ggsurvplot(survfit(Surv(months_at_dx_followup, os_event) ~ treatment__type, data=restricted_stage_trt_type_),
+           title = "Overall survival from date of diagnosis",
+           font.main = c(18, "bold", "black"),
+           font.x = c(16, "bold", "black"), font.y = c(16, "bold", "black"),
+           font.legend = c(12, "bold", "black"), font.tickslab = c(14, "bold", "black"),
+           size = 1.5,
+           
+           pval=TRUE, palette = c("black", "green","blue", "red"), 
+           # Add risk table
+           risk.table = "abs_pct", risk.table.title = "Risk table (count(%))",
+           risk.table.y.text = FALSE, risk.table.fontsize = 4,tables.height = 0.25,
+           tables.theme = theme_survminer(base_size = 2,
+                                          font.main = c(16, "bold", "black"),
+                                          font.x = c(16, "bold", "black"),
+                                          font.y = c(16, "bold", "transparent"),
+                                          font.tickslab = c(13, "bold", "black")
+           ),
+           
+           legend.title = "", xlab = "Time (in months)", ylab="Survival Probability"#,  
+           # # legend.labs=c("upfront neoadjuvant", "upfront surgery")
+           ) + guides(colour = guide_legend(nrow = 2))
+```
+</div>
+
+<div class = "col-md-6">
+```{r, fig.height = 7}
+ggsurvplot(survfit(Surv(months_of_dx_rec_free, rec_event) ~ treatment__type, data=restricted_stage_trt_type_),
+           title = "Recurrence free survival from date of diagnosis",
+           font.main = c(18, "bold", "black"),
+           font.x = c(16, "bold", "black"), font.y = c(16, "bold", "black"),
+           font.legend = c(12, "bold", "black"), font.tickslab = c(14, "bold", "black"),
+           size = 1.5,
+           
+           pval=TRUE, palette = c("black", "green","blue", "red"), 
+           # Add risk table
+           risk.table = "abs_pct", risk.table.title = "Risk table (count(%))",
+           risk.table.y.text = FALSE, risk.table.fontsize = 4,tables.height = 0.25,
+           tables.theme = theme_survminer(base_size = 1,
+                                          font.main = c(16, "bold", "black"),
+                                          font.x = c(16, "bold", "black"),
+                                          font.y = c(16, "bold", "transparent"),
+                                          font.tickslab = c(13, "bold", "black")
+           ),
+           
+           legend.title = "", xlab = "Time (in months)", ylab="Recurrence Probability"#,  
+           # # legend.labs=c("upfront neoadjuvant", "upfront surgery")
+           ) + guides(colour = guide_legend(nrow = 2))
+```
+</div>
+</div>
+
+<br>
+<br>
+
+***
+## IV.Regression
+```{r}
+model <- glm(recurremce ~ treatment__type + preDx_comorbidities + age_at_Dx + race_cancer_registry + tnm_cs__mixed_group_stage + debulking_status, data = radiomics, family = binomial)
+tbl1 <- tbl_regression(model)
+tbl2 <- tbl_regression(model, exponentiate = TRUE)
+tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Estimate**", "**Exp**"))
+```
+
+<br>
+<br>
+
+&nbsp;
+<hr />
+<p style="text-align: center;">Code in <a href="https://github.com/PeresLabAtMoffitt/MilesForMoffittRadiomics">PeresLabAtMoffitt </a>GitHub </p>
+
+<!-- ###  -->
+<!-- <div class = "row"> -->
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r} -->
+
+<!-- ``` -->
+<!-- </div> -->
+
+<!-- <div class = "col-md-6"> -->
+<!-- ```{r} -->
+
+<!-- ``` -->
+<!-- </div> -->
+<!-- </div> -->
