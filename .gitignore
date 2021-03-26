@@ -13,6 +13,7 @@
 *.html
 *.jpg
 *.csv
+*.rds
 
 # Rmd and pptx
 *.pptx

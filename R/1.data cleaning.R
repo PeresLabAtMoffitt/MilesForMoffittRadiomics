@@ -140,87 +140,12 @@ clinical_cleaning <- function(data) {
                         " \\(.*"))
 }
 
-clinical <- clinical %>% 
-  # For summary stats
-  mutate(age_at_Dx = round(interval(start = date_of_birth, end = date_of_diagnosis)/
-                             duration(n=1, units = "years"), 2)) %>% 
-  mutate(months_at_first_neoadjuvant_chem = round(interval(start = date_of_diagnosis, end = date_of_first_neoadjuvant_chemot)/
-                                                 duration(n=1, units = "months"), 2)) %>% 
-  mutate(months_at_first_adjuvant_chem = round(interval(start = date_of_diagnosis, end = date_of_first_adjuvant_chemother)/
-                                              duration(n=1, units = "months"), 2)) %>% 
-  mutate(months_at_first_chemo = coalesce(months_at_first_neoadjuvant_chem, months_at_first_adjuvant_chem)) %>% 
-  mutate(first_chemo_date = coalesce(date_of_first_neoadjuvant_chemot, date_of_first_adjuvant_chemother)) %>% 
-  
-  mutate(months_at_first_surgery = round(interval(start = date_of_diagnosis, end = date_of_first_surgery)/
-                                        duration(n=1, units = "months"), 2)) %>% 
-  mutate(age_at_surgery = round(interval(start = date_of_birth, end = date_of_surgery)/
-                                  duration(n=1, units = "years"), 2)) %>% 
-  mutate(months_at_first_treatment = 
-           coalesce(months_at_first_neoadjuvant_chem, months_at_first_surgery, months_at_first_adjuvant_chem)) %>% 
-  mutate(first_treatment_date = 
-           coalesce(date_of_first_neoadjuvant_chemot, date_of_first_surgery, date_of_first_adjuvant_chemother)) %>% 
-  
-  mutate(age_at_first_recurrence = round(interval(start = date_of_birth, end = date_of_first_recurrence)/
-                                           duration(n=1, units = "years"), 2)) %>% 
-  mutate(month_at_first_recurrence = round(interval(start = date_of_diagnosis, end = date_of_first_recurrence)/
-                                           duration(n=1, units = "months"), 2)) %>% 
-  
-  # For survivals
-  mutate(os_event = ifelse((vital_new == "Alive"), 0, 1)) %>% 
-  mutate(rec_event = ifelse((has_the_patient_recurred_ == "no"), 0, 1)) %>%
-  
-  mutate(months_at_dx_followup = round(interval(start = date_of_diagnosis, end = fwdate_most_recent)/
-                                      duration(n=1, units = "months"), 2)) %>% 
-  mutate(months_at_surg_followup = round(interval(start = date_of_first_surgery, end = fwdate_most_recent)/
-                                      duration(n=1, units = "months"), 2)) %>% 
-  mutate(months_at_neo_followup = round(interval(start = date_of_first_neoadjuvant_chemot, end = fwdate_most_recent)/
-                                      duration(n=1, units = "months"), 2)) %>% 
-  mutate(months_at_chem_followup = round(interval(start = first_chemo_date, end = fwdate_most_recent)/
-                                           duration(n=1, units = "months"), 2)) %>% 
-  mutate(months_at_treat_followup = round(interval(start = first_treatment_date, end = fwdate_most_recent)/
-                                      duration(n=1, units = "months"), 2)) %>% 
-  
-  mutate(recurrence_date = coalesce(date_of_first_recurrence, fwdate_most_recent)) %>% 
-  mutate(months_of_dx_rec_free = round(interval(start = date_of_diagnosis, end = recurrence_date)/
-                                           duration(n=1, units = "months"), 2)) %>% 
-  mutate(months_of_surg_rec_free = round(interval(start = date_of_first_surgery, end = recurrence_date)/
-                                             duration(n=1, units = "months"), 2)) %>% 
-  mutate(months_of_neo_rec_free = round(interval(start = date_of_first_neoadjuvant_chemot, end = recurrence_date)/
-                                           duration(n=1, units = "months"), 2)) %>% 
-  mutate(months_of_chem_rec_free = round(interval(start = first_chemo_date, end = recurrence_date)/
-                                             duration(n=1, units = "months"), 2)) %>% 
-  mutate(months_of_treat_rec_free = round(interval(start = first_treatment_date, end = recurrence_date)/
-                                             duration(n=1, units = "months"), 2)) %>% 
-  mutate(recurrence_date_after_surgery = case_when(
-    date_of_first_recurrence > date_of_first_surgery    ~ date_of_first_recurrence,
-    TRUE                                                ~ NA_POSIXct_
-  )) %>% 
-  mutate(has_the_patient_recurred_after_surg = ifelse(!is.na(recurrence_date_after_surgery), "Recurrence", "No Recurrence")) %>% 
-  mutate(has_the_patient_recurred_ = case_when(
-    has_the_patient_recurred_ == "Yes"          ~ "Recurrence",
-    has_the_patient_recurred_ == "No"           ~ "No Recurrence"
-  )) %>% 
-  mutate(recurremce = case_when(
-    has_the_patient_recurred_ == "Recurrence"          ~ 1,
-    has_the_patient_recurred_ == "No Recurrence"           ~ 0
-  )) %>% 
-  mutate(preDx_comorbidities = case_when(
-    str_detect(hypertension, "pre|Pre") |
-      str_detect(diabetes_mellitus, "pre|Pre") |
-      str_detect(hypercholesterolemia, "pre|Pre") |
-      str_detect(chronic_kidney_disease, "pre|Pre") |
-      str_detect(cardiac_conditions_including_bu, "pre|Pre")        ~ "Comorbidities",
-    TRUE                                                            ~ "No comorbidities"
-  )) %>% 
-  mutate(debulking_status = 
-           str_remove(debulking_status, 
-                      " \\(.*"))
+clinical <- clinical_cleaning(data = clinical)
+
 
 ################################################################################################# IV ### Bind df----
-
 radiomics <- full_join(features, clinical, by = "patient_id") %>% 
   filter(!is.na(lesion_id))
-
 
 
 ################################################################################################# V ### New file----
@@ -232,7 +157,8 @@ merge_data <-
     .cols = contains("date"),
     .fns = ~ as.POSIXct(., format = "%m/%d/%Y"))) 
 
- final_data <- clinical_cleaning(data = merge_data)
-
+final_data <- clinical_cleaning(data = merge_data) %>% 
+  filter(!is.na(lesionid))
+write_rds(final_data, "radiomics.rds")
 
 
