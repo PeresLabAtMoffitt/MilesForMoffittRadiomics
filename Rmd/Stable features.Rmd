@@ -1,0 +1,223 @@
+---
+title: "Radiomics stable features"
+author: "Christelle Colin-Leitzinger"
+date: '`r Sys.Date()`'
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: false
+    theme: united
+    highlight: pygments
+    df_print: paged
+editor_options: 
+  chunk_output_type: console
+---
+
+<style type="text/css">
+.figure {
+   margin-top: 25px;
+   <!-- margin-bottom: 100px; -->
+}
+
+table {
+    margin-top: 10px;
+    margin-bottom: 25px;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE,
+                      cache = FALSE,
+                      # fig.width = 7, fig.height = 5, 
+                      fig.align='center'#, fig.show='hold'
+                      )
+options(gtsummary.print_engine = "gt")
+options(gtsummary.as_gt.addl_cmds = "gt::tab_options(table.font.size = 14, data_row.padding = gt::px(1))")
+```
+
+```{r library}
+library(tidyverse)
+library(lubridate)
+library(data.table)
+library(gtsummary)
+library(gplots)
+library(heatmap.plus)
+library(RColorBrewer)
+library(irr)
+library(ggcorrplot)
+library(survival)
+library(survminer)
+library(DescTools)
+```
+
+<br>
+<br>
+<!-- Leave a space here -->
+
+***
+
+```{r load test-retest}
+first_seg <- read_csv("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_TestRetest_first segmentation.csv") %>%
+  `colnames<-`(str_remove(colnames(.), " _first_segmentation") %>% tolower() %>% gsub(":", "_",.)) %>% 
+  mutate(date = as.Date(date, format = "%m/%d/%y"))
+
+second_seg <- read_csv("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_TestRetest_second segmentation.csv") %>%
+  `colnames<-`(str_remove(colnames(.), " _second_seg") %>% tolower() %>% gsub(":", "_",.)) %>% 
+  mutate(date = as.Date(as.character(date), format = "%Y%m%d"))
+
+segmentation <- bind_rows(first_seg, second_seg) %>% 
+  mutate(seg = "segmentation0") %>% 
+  unite(segmentationcohort, c(seg, segmentationcohort), sep = "") %>% 
+  mutate(mrn = as.character(mrn)) %>% 
+  # select(-c(date, 'lesion id', 'segmented by')) %>% 
+  as.data.frame(.)
+```
+
+# ICC
+I first used the ICC for a single rater, wo-way mixed effects model with a measure for absolute agreement (I found that the two-way mixed-effects model and the absolute agreement are recommended for both test-retest and intra-rater reliability studies (Koo et al., 2016) so I wanted to compare with CCC).  
+**For ICC, a value of 0.9 is considered as excellent.**  
+86 features are found excellent.
+```{r ICC, rows.print=86}
+ICC_data <- data.frame(matrix(nrow=1, ncol=0)) #data.frame(x = c("variable", "ICC"))
+for(i in 1:length(colnames(segmentation))) {
+  
+  rad <- segmentation %>% select(mrn, segmentationcohort)
+  
+  if(class(segmentation[,i]) == "numeric" | class(segmentation[,i]) == "integer") {
+    
+    ICC_df <- cbind(rad, value = segmentation[,i])
+    ICC_df <- ICC_df %>%
+      pivot_wider(names_from = segmentationcohort, values_from = value) %>%
+      select(c(starts_with("segmentation0")))
+    
+    # ICC <- ICC(ICC_df)$results[3,2] # 2 way mixed effect for single rater
+    ICC <- icc(
+      ICC_df, model = "twoway", 
+      type = "agreement", unit = "single"
+    )$value
+    ICC_data <- cbind(ICC_data,ICC)
+    
+  }
+  
+}
+colnames(ICC_data) <- colnames(segmentation)[6:ncol(segmentation)]
+rm(ICC_df, ICC, i, rad)
+
+library(plotly)
+
+plot <- ICC_data %>% 
+  pivot_longer(cols = everything()) %>% 
+  mutate(ICC = "ICC") %>% 
+  mutate(reliability = case_when(
+    value < 0.5 ~ "poor",
+    value >= 0.5 &
+      value < 0.75 ~ "moderate",
+    value >= 0.75 &
+      value < 0.9 ~ "good",
+    value >= 0.9 ~ "excellent"
+  )) %>% 
+  mutate(text = paste("Feature: ", name, "\nICC: ", round(value, 2), "\nReliability: ", reliability, sep="")) %>% 
+  ggplot(aes(x = ICC, y = value, color = reliability, text=text))+
+  labs(title = "Reliability of the radiomic features based on ICC value", x= NULL, y= "ICC value")+
+  scale_color_brewer(palette = "Set2") +
+  scale_x_discrete(labels = "")+
+  theme_minimal()+
+  geom_point(size = 1, position=position_jitter(w=0.8))
+plot <- ggplotly(plot, tooltip="text")
+plot
+
+ICC_data <- ICC_data %>% 
+  pivot_longer(cols = everything()) %>% 
+  mutate(reliability = case_when(
+    value < 0.5 ~ "poor",
+    value >= 0.5 &
+      value < 0.75 ~ "moderate",
+    value >= 0.75 &
+      value < 0.9 ~ "good",
+    value >= 0.9 ~ "excellent"
+  )) %>% arrange(desc(value))
+ICC_data
+```
+<br>
+
+***
+
+# CCC
+The features noted as stable have a CCC >= 0.95. 75 features are found as stable.  
+The following table is saved at   
+smb://hlm/data/project/Peres_Research/Ovarian - Radiomics/Christelle/stable features/selected stable features at 95p.csv
+```{r CCC, rows.print=75}
+CCC_data <- data.frame(matrix(nrow=1, ncol=0)) #data.frame(x = c("variable", "CCC"))
+for(i in 1:length(colnames(segmentation))) {
+  
+  rad <- segmentation %>% select(mrn, segmentationcohort)
+  
+  if(class(segmentation[,i]) == "numeric" | class(segmentation[,i]) == "integer") {
+    
+    CCC_df <- cbind(rad, value = segmentation[,i])
+    CCC_df <- CCC_df %>%
+      pivot_wider(names_from = segmentationcohort, values_from = value) %>%
+      select(c(starts_with("segmentation0")))
+    
+    CCC <- CCC(x=CCC_df$segmentation01, y=CCC_df$segmentation02, ci = "z-transform", conf.level = 0.95, na.rm = FALSE)$rho.c$est
+    CCC_data <- cbind(CCC_data,CCC)
+    
+  }
+  
+}
+colnames(CCC_data) <- colnames(segmentation)[6:ncol(segmentation)]
+rm(CCC_df, CCC, i, rad)
+
+library(plotly)
+
+plot <- CCC_data %>% 
+  pivot_longer(cols = everything()) %>% 
+  mutate(CCC = "CCC") %>% 
+  mutate(reliability = case_when(
+    value < 0.95 ~ "not considred as stable",
+    value >= 0.95 ~ "stable"
+  )) %>% 
+  mutate(text = paste("Feature: ", name, "\nCCC: ", round(value, 2), "\nReliability: ", reliability, sep="")) %>% 
+  ggplot(aes(x = CCC, y = value, color = reliability, text=text))+
+  labs(title = "Reliability of the radiomic features based on CCC value", x= NULL, y= "CCC value")+
+  scale_color_brewer(palette = "Set2") +
+  scale_x_discrete(labels = "")+
+  theme_minimal()+
+  geom_point(size = 1, position=position_jitter(w=0.8))
+plot <- ggplotly(plot, tooltip="text")
+plot
+
+CCC_data <- CCC_data %>% 
+  pivot_longer(cols = everything()) %>% 
+  mutate(reliability = case_when(
+    value >= 0.95      ~ "stable",
+    TRUE               ~ "not considred as stable"
+  )) %>% arrange(desc(value))
+CCC_data
+
+path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics", "Christelle")
+write_csv(CCC_data %>% filter(value > 0.95), paste0(path, "/stable features/selected stable features at 95p.csv"))
+```
+<br>
+
+***
+
+# Put together
+ICC and CCC are similar : ICC is more tolerant (0.90 vs 0.95).  
+The following table is saved at   
+smb://hlm/data/project/Peres_Research/Ovarian - Radiomics/Christelle/stable features/concordance CCC and ICC.csv
+```{r concordance, rows.print=86}
+concordance <- full_join(CCC_data, ICC_data, by = "name", suffix = c("_CCC", "_ICC")) %>% arrange(desc(value_ICC)) %>% 
+  select(value_ICC, reliability_CCC, value_CCC, reliability_ICC, name)
+concordance
+write_csv(concordance, paste0(path, "/stable features/concordance CCC and ICC.csv"))
+```
+
+# It comes to decide if we choose 0.95 or 0.9 as a limit.
+<font size="10"> `r  emo::ji("party_popper")``r  emo::ji("balloon")``r  emo::ji("clinking_glasses")``r  emo::ji("confetti")`</font> 
+
+
+
