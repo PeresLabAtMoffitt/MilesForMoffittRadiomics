@@ -1,11 +1,11 @@
 ################################################################################# Select stable features
 
 # ICC
-first_seg <- read_csv(paste0("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_segmentation_TestRetest_first segmentation.csv")) %>%
+first_seg <- read_csv("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_TestRetest_first segmentation.csv") %>%
   `colnames<-`(str_remove(colnames(.), " _first_segmentation") %>% tolower() %>% gsub(":", "_",.)) %>% 
   mutate(date = as.Date(date, format = "%m/%d/%y"))
 
-second_seg <- read_csv(paste0("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_segmentation_TestRetest_second segmentation.csv")) %>%
+second_seg <- read_csv("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_TestRetest_second segmentation.csv") %>%
   `colnames<-`(str_remove(colnames(.), " _second_seg") %>% tolower() %>% gsub(":", "_",.)) %>% 
   mutate(date = as.Date(as.character(date), format = "%Y%m%d"))
 
@@ -29,7 +29,11 @@ for(i in 1:length(colnames(segmentation))) {
       pivot_wider(names_from = segmentationcohort, values_from = value) %>%
       select(c(starts_with("segmentation0")))
     
-    ICC <- ICC(ICC_df)$results[4,2]
+    # ICC <- ICC(ICC_df)$results[3,2] # 2 way mixed effect for single rater
+    ICC <- icc(
+      ICC_df, model = "twoway", 
+      type = "agreement", unit = "single"
+    )$value
     ICC_data <- cbind(ICC_data,ICC)
     
   }
@@ -90,7 +94,7 @@ for(i in 1:length(colnames(segmentation))) {
       pivot_wider(names_from = segmentationcohort, values_from = value) %>%
       select(c(starts_with("segmentation0")))
     
-    CCC <- CCC(x=ICC_df$segmentation01, y=ICC_df$segmentation02, ci = "z-transform", conf.level = 0.95, na.rm = FALSE)$rho.c$est
+    CCC <- CCC(x=CCC_df$segmentation01, y=CCC_df$segmentation02, ci = "z-transform", conf.level = 0.95, na.rm = FALSE)$rho.c$est
     CCC_data <- cbind(CCC_data,CCC)
     
   }
@@ -127,7 +131,7 @@ CCC_data <- CCC_data %>%
   mutate(reliability = case_when(
     value >= 0.95      ~ "stable",
     TRUE               ~ "not considred as stable"
-  )) %>% arrange(reliability)
+  )) %>% arrange(desc(reliability))
 CCC_data
 
 # tmp.lab <- data.frame(lab = paste("CCC: ", 
@@ -140,8 +144,10 @@ CCC_data
 # beta <-  summary(z)$coefficients[2,1]
 # tmp.lm <- data.frame(alpha, beta)
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics", "Christelle")
-write_csv(CCC_data %>% filter(value > 0.95), paste0(path, "/stable features/selected stable features.csv"))
+write_csv(CCC_data %>% filter(value > 0.90), paste0(path, "/stable features/selected stable features at 90p.csv"))
 
+concordance <- full_join(CCC_data, ICC_data, by = "name", suffix = c("_CCC", "_ICC")) %>% arrange(desc(value_CCC))
+write_csv(concordance, paste0(path, "/stable features/concordance CCC and ICC.csv"))
 
 
 
