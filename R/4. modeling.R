@@ -37,6 +37,25 @@ summary(data_recipe)
 # step_dummy(all_nominal(), -all_outcomes())
 
 
+# logistic reg
+mod <-
+  logistic_reg(penalty = 0.01, mixture = 1/3) %>%
+  # now say how you want to fit the model and another other options
+  set_engine("glmnet", nlambda = 10)
+translate(mod, engine = "glmnet")
+# Support vector machine
+# ramdom forest
+rf_mod <- rand_forest(mode = "classification") %>% 
+  set_enine("ranger")
+rf_mod <- rf_mod %>% train_data %>% 
+  fit(recurrence ~ ., data = train_data)
+# neural network
+
+
+
+
+
+
 
 
 
