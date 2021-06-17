@@ -5,22 +5,16 @@ library(tidymodels)
 # library(dotwhisker)  # for visualizing regression results
 
 
-############################################################################### I ### Data prep
+############################################################################### I ### Data prepping
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
 
-# 1.1. Clinical
 clinical <- read_rds("clinical.rds")
 
-
-
-
-
-# 1.2. Radiomics features
 # Select column name of stable features in the data
 concordance <- read_rds("concordance.rds") %>% 
   filter(value_CCC >= 0.95) %>% 
   select(name) %>% 
-  mutate(stable_features = str_match(concordance$name, "([a-z][:digit:]*)_*")[,2])
+  mutate(stable_features = str_match(name, "([a-z][:digit:]*)_*")[,2])
 
 stable_features <- paste0(paste("nor_", concordance$stable_features, "[a-z]", sep = ""), collapse = "|")
 # radiomics <- read_csv(
@@ -29,40 +23,84 @@ stable_features <- paste0(paste("nor_", concordance$stable_features, "[a-z]", se
 #   select(matches(stable_features))
 
 # radiomics <- read_rds("radiomics.rds")
-radiomics1 <- read_rds("radiomics.rds") %>% 
+mldata <- read_rds("radiomics.rds") %>% 
   select(mrn, matches(stable_features)) %>% 
-  left_join(., clinical, by = "mrn")
+  left_join(., clinical, by = "mrn") %>% 
+  drop_na(starts_with("nor")) %>% 
+  # it is important that the outcome variable for training a (logistic) regression model is a factor.
+  mutate_if(is.character, as.factor)
+
+# Explore what will need to be changed
+skimr::skim(mldata)
+# warning for date variable
+
+
+
+# mldata <- clinical %>% will pass to recipe
+  # # 
+  # mutate(year_ct_scan = year(baseline_ct_scan_date)) %>% 
+  # mutate(year_st_neo = year(date_of_first_neoadjuvant_chemot)) %>%   # + ecog_pretrt_date
+  # mutate(year_st_surg = year(date_of_first_surgery)) %>% 
+  # mutate(year_st_adj = year(date_of_first_adjuvant_chemother)) %>% 
+  # mutate(month_ct_scan = month(baseline_ct_scan_date)) %>% 
+  # mutate(month_st_neo = month(date_of_first_neoadjuvant_chemot)) %>% 
+  # mutate(month_st_surg = month(date_of_first_surgery)) %>% 
+  # mutate(month_st_adj = month(date_of_first_adjuvant_chemother)) %>% 
+  # select(-c(baseline_ct_scan_date, date_of_first_neoadjuvant_chemot, date_of_first_surgery, date_of_first_adjuvant_chemother,
+  #           date_of_birth, date_of_diagnosis, date_of_first_recurrence, date_of_surgery_abstracted, date_of_last_followup,
+  #           fwdate_most_recent, first_chemo_date, first_treatment_date, rec_event_date, recurrence_date_after_surgery)) %>% 
+  # # Clean not meaningful var
+  # select(-c(subject_number, comment_for_cardiac_comorbidity)) # tumor_sequence_number, recurrence_time
 
 # Cleaning
 rm(concordance, stable_features)
 
 
-############################################################################### II ### Machine Learning
+############################################################################### II ### Build model
 set.seed(1234)
 
-# 1. Preprocessing the data
-radiomics1 <- radiomics1 %>% 
-  drop_na(starts_with("nor")) %>% 
-  # it is important that the outcome variable for training a (logistic) regression model is a factor.
-  mutate_if(is.character, as.factor)
-
-
-
-# 2. Splitting the data
+# 1. Splitting the data
 # 3/4 of the data into the training set but split evenly winthin race
-data_split <- initial_split(radiomics1, prop = 3/4, strata = c(race, w_wo_contrast))
+data_split <- initial_split(mldata, prop = 3/4, strata = Race) # w_wo_contrast
 
 # Create data frames for the two sets:
 train_data <- training(data_split)
 test_data  <- testing(data_split)
 
+# 2. Recipe for data pre processing
 # Recipe
-data_recipe <- 
+data_recipe <-
   recipe(has_the_patient_recurred_ ~ ., data = train_data)  %>% 
   # keep these variables but not use them as either outcomes or predictors
-  update_role(mrn, date, lesionid, new_role = "ID") 
+  update_role(mrn, new_role = "ID") %>% 
+  # change all factor to dummy variables
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  # Feature engineering on dates
 
 summary(data_recipe)
+
+
+
+
+############################################################################### II ### Data Tuning 
+
+
+############################################################################### II ### Machine Learning
+
+
+  
+
+
+
+# # 2. Splitting the data
+# # 3/4 of the data into the training set but split evenly winthin race
+# data_split <- initial_split(radiomics1, prop = 3/4, strata = c(race, w_wo_contrast))
+# 
+# # Create data frames for the two sets:
+# train_data <- training(data_split)
+# test_data  <- testing(data_split)
+
+
 
 
 # Do we need dummy variable aka %>% 
