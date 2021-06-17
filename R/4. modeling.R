@@ -8,10 +8,14 @@ library(tidymodels)
 ############################################################################### I ### Data prep
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
 
-clinical <- readxl::read_xlsx(
-    paste0(path,
-           "/data/radiomic_CT_final_v3.xlsx")) %>% 
-  `colnames<-`(str_remove(colnames(.), "_cancer_registry") %>% tolower() %>% str_replace_all(., "__", "_"))
+# 1.1. Clinical
+clinical <- read_rds("clinical.rds")
+
+
+
+
+
+# 1.2. Radiomics features
 # Select column name of stable features in the data
 concordance <- read_rds("concordance.rds") %>% 
   filter(value_CCC >= 0.95) %>% 
@@ -24,8 +28,8 @@ stable_features <- paste0(paste("nor_", concordance$stable_features, "[a-z]", se
 #          "/data/Merge clinical and radiomics data/Ovarian_Normalized_Radiomics_Features_05242021.csv")) #%>% 
 #   select(matches(stable_features))
 
-# radiomics <- readRDS("radiomics.rds")
-radiomics1 <- readRDS("radiomics.rds") %>% 
+# radiomics <- read_rds("radiomics.rds")
+radiomics1 <- read_rds("radiomics.rds") %>% 
   select(mrn, matches(stable_features)) %>% 
   left_join(., clinical, by = "mrn")
 
@@ -46,7 +50,7 @@ radiomics1 <- radiomics1 %>%
 
 # 2. Splitting the data
 # 3/4 of the data into the training set but split evenly winthin race
-data_split <- initial_split(radiomics1, prop = 3/4, strata = race)
+data_split <- initial_split(radiomics1, prop = 3/4, strata = c(race, w_wo_contrast))
 
 # Create data frames for the two sets:
 train_data <- training(data_split)
@@ -82,7 +86,41 @@ rf_mod <- rf_mod %>% #train_data %>%
 
 
 
+# Evaluate model
 
+results_train <- mod %>% 
+  predict(new_data = train_data) %>% 
+  mutate(truth = train_data$recurrence, model = "glmet") %>% 
+  bind_rows(rf_mod %>% 
+              predict(new_data = train_data) %>% 
+              mutate(truth = train_data$recurrence, model = "rf"))
+
+results_test <- mod %>% 
+  predict(new_data = test_data) %>% 
+  mutate(truth = train_data$recurrence, model = "glmet") %>% 
+  bind_rows(rf_mod %>% 
+              predict(new_data = test_data) %>% 
+              mutate(truth = train_data$recurrence, model = "rf"))
+
+# Measure ho they performed
+
+results_train %>% 
+  group_by(model) %>% 
+  rmse(truth = truth, estimate = .prod) # .estimate = rootmean square error is lower so do better
+
+results_test %>% 
+  group_by(model) %>% 
+  rmse(truth = truth, estimate = .prod) # .est same as train so didn't overfit
+# if rf becore bigger than the one for training
+
+
+results_test %>% 
+  mutate(train = "testing") %>% 
+  bind_rows(results_train %>% mutate(train = "training")) %>% 
+  ggplot(aes(truth, .prod, color = model)) +
+  geom_abline(lty = 2, color = "grey80", size = 1.5)+
+  geom_point(alpha = 0.5)+
+  facet_wrap( ~ train)
 
 
 

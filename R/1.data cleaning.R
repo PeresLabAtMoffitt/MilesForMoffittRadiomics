@@ -40,16 +40,12 @@ features <- features %>%
   left_join(ID_linkage, ., by = "mrn") %>% select(-mrn)
 colnames(features)[54]
 
-clinical <- readxl::read_xls("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/radiomic_CT_final.xls") %>% 
-  `colnames<-`(str_remove(colnames(.), "_Cancer_Registry|_CS__Mixed_Group") %>%
-                 str_replace_all( "__", "_") %>%
-                 tolower()) %>%
-  rename(Gender = "gender", Race = "race", Ethnicity = "ethnicity", Histology = "histology") %>% 
-  mutate(across(where(is.character), .fns = ~ tolower(.))) %>%
-  mutate(across(where(is.character), .fns = ~ capwords(.))) %>%
-  mutate(across(where(is.character), .fns = ~ str_replace(., "Unknown|unknown|NANA", NA_character_))) %>%
-  left_join(ID_linkage, ., by = "mrn") %>% 
-  select(-mrn)
+path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
+
+clinical <- readxl::read_xlsx(
+  paste0(path,
+         "/data/radiomic_CT_final_v3.xlsx"))
+
 
 ################################################################################################# II ### Features----
 summary(features)
@@ -61,9 +57,26 @@ for(i in 1:length(colnames(features))) {
 }
 summary(features)
 
+
 ################################################################################################# III ### Clinical----
+clinical <- clinical %>% 
+  `colnames<-`(
+    str_remove(colnames(.), "_cancer_registry") %>% 
+      tolower() %>% 
+      str_replace_all(., "__", "_")
+  ) %>% 
+  rename(Gender = "gender", Race = "race", Ethnicity = "ethnicity", Histology = "histology") %>% 
+  mutate(across(where(is.character), .fns = ~ tolower(.))) %>%
+  mutate(across(where(is.character), .fns = ~ capwords(.))) %>%
+  mutate(across(where(is.character), .fns = ~ str_replace(., "Unknown|unknown|NANA", NA_character_))) %>%
+  mutate(date_of_first_adjuvant_chemother = as.POSIXct(date_of_first_adjuvant_chemother, format = "%m/%d/%y")) %>% 
+  # left_join(ID_linkage, ., by = "mrn") %>% 
+  select(#-mrn, 
+    -complete_, -moffitt_patient)
+
 clinical_cleaning <- function(data) {
   data <- data %>% 
+    
     # For summary stats
     mutate(age_at_Dx = round(interval(start = date_of_birth, end = date_of_diagnosis)/
                                duration(n=1, units = "years"), 2)) %>% 
@@ -72,28 +85,37 @@ clinical_cleaning <- function(data) {
     mutate(months_at_first_adjuvant_chem = round(interval(start = date_of_diagnosis, end = date_of_first_adjuvant_chemother)/
                                                    duration(n=1, units = "months"), 2)) %>% 
     mutate(months_at_first_chemo = coalesce(months_at_first_neoadjuvant_chem, months_at_first_adjuvant_chem)) %>% 
-    mutate(first_chemo_date = coalesce(date_of_first_neoadjuvant_chemot, date_of_first_adjuvant_chemother)) %>% 
-    
+    mutate(first_chemo_date = coalesce(date_of_first_neoadjuvant_chemot, date_of_first_adjuvant_chemother)) %>%
     mutate(months_at_first_surgery = round(interval(start = date_of_diagnosis, end = date_of_first_surgery)/
                                              duration(n=1, units = "months"), 2)) %>% 
     mutate(age_at_surgery = round(interval(start = date_of_birth, end = date_of_first_surgery)/ # First or abstracted?
                                     duration(n=1, units = "years"), 2)) %>% 
     mutate(months_at_first_treatment = 
              coalesce(months_at_first_neoadjuvant_chem, months_at_first_surgery, months_at_first_adjuvant_chem)) %>% 
-    mutate(first_treatment_date = 
-             coalesce(date_of_first_neoadjuvant_chemot, date_of_first_surgery, date_of_first_adjuvant_chemother)) %>% 
     
     mutate(age_at_first_recurrence = round(interval(start = date_of_birth, end = date_of_first_recurrence)/
                                              duration(n=1, units = "years"), 2)) %>% 
-    mutate(month_at_first_recurrence = round(interval(start = date_of_diagnosis, end = date_of_first_recurrence)/
-                                               duration(n=1, units = "months"), 2)) %>% 
+    mutate(month_at_first_recurrence_Dx = round(interval(start = date_of_diagnosis, end = date_of_first_recurrence)/
+                                                  duration(n=1, units = "months"), 2)) %>% 
+    # For recurrence
+    mutate(first_treatment_date = 
+             coalesce(date_of_first_neoadjuvant_chemot, date_of_first_surgery, date_of_first_adjuvant_chemother)) %>% 
+    mutate(rec_event_date = coalesce(date_of_first_recurrence, fwdate_most_recent)) %>% 
+    
+    mutate(recurrence_time = round(interval(start = first_treatment_date, end = rec_event_date)/
+                                                  duration(n=1, units = "months"), 2)) %>% 
+    mutate(rec_event = ifelse((has_the_patient_recurred_ == "no"), 0, 1)) %>%
+    mutate(has_the_patient_recurred_ = case_when(
+      str_detect(has_the_patient_recurred_, "Yes|yes")          ~ "Recurrence",
+      str_detect(has_the_patient_recurred_, "No|no")           ~ "No Recurrence"
+    )) %>%
     
     # For survivals
-    mutate(os_event = ifelse((vital_new == "Alive"), 0, 1)) %>% 
-    mutate(rec_event = ifelse((has_the_patient_recurred_ == "no"), 0, 1)) %>%
-    
-    mutate(months_at_dx_followup = round(interval(start = date_of_diagnosis, end = fwdate_most_recent)/
+    mutate(os_time = round(interval(start = date_of_diagnosis, end = fwdate_most_recent)/
                                            duration(n=1, units = "months"), 2)) %>% 
+    mutate(os_event = ifelse((vital_new == "Alive"), 0, 1)) %>% 
+    
+    # Others
     mutate(months_at_surg_followup = round(interval(start = date_of_first_surgery, end = fwdate_most_recent)/
                                              duration(n=1, units = "months"), 2)) %>% 
     mutate(months_at_neo_followup = round(interval(start = date_of_first_neoadjuvant_chemot, end = fwdate_most_recent)/
@@ -103,30 +125,23 @@ clinical_cleaning <- function(data) {
     mutate(months_at_treat_followup = round(interval(start = first_treatment_date, end = fwdate_most_recent)/
                                               duration(n=1, units = "months"), 2)) %>% 
     
-    mutate(recurrence_date = coalesce(date_of_first_recurrence, fwdate_most_recent)) %>% 
-    mutate(months_of_dx_rec_free = round(interval(start = date_of_diagnosis, end = recurrence_date)/
+    mutate(months_of_dx_rec_free = round(interval(start = date_of_diagnosis, end = rec_event_date)/
                                            duration(n=1, units = "months"), 2)) %>% 
-    mutate(months_of_surg_rec_free = round(interval(start = date_of_first_surgery, end = recurrence_date)/
+    mutate(months_of_surg_rec_free = round(interval(start = date_of_first_surgery, end = rec_event_date)/
                                              duration(n=1, units = "months"), 2)) %>% 
-    mutate(months_of_neo_rec_free = round(interval(start = date_of_first_neoadjuvant_chemot, end = recurrence_date)/
+    mutate(months_of_neo_rec_free = round(interval(start = date_of_first_neoadjuvant_chemot, end = rec_event_date)/
                                             duration(n=1, units = "months"), 2)) %>% 
-    mutate(months_of_chem_rec_free = round(interval(start = first_chemo_date, end = recurrence_date)/
+    mutate(months_of_chem_rec_free = round(interval(start = first_chemo_date, end = rec_event_date)/
                                              duration(n=1, units = "months"), 2)) %>% 
-    mutate(months_of_treat_rec_free = round(interval(start = first_treatment_date, end = recurrence_date)/
+    mutate(months_of_treat_rec_free = round(interval(start = first_treatment_date, end = rec_event_date)/
                                               duration(n=1, units = "months"), 2)) %>% 
     mutate(recurrence_date_after_surgery = case_when(
       date_of_first_recurrence > date_of_first_surgery    ~ date_of_first_recurrence,
       TRUE                                                ~ NA_POSIXct_
     )) %>%
     mutate(has_the_patient_recurred_after_surg = ifelse(!is.na(recurrence_date_after_surgery), "Recurrence", "No Recurrence")) %>%
-    mutate(has_the_patient_recurred_ = case_when(
-      str_detect(has_the_patient_recurred_, "Yes|yes")          ~ "Recurrence",
-      str_detect(has_the_patient_recurred_, "No|no")           ~ "No Recurrence"
-    )) %>%
-    mutate(recurremce = case_when(
-      has_the_patient_recurred_ == "Recurrence"          ~ 1,
-      has_the_patient_recurred_ == "No Recurrence"           ~ 0
-    )) %>%
+   
+
     mutate(preDx_comorbidities = case_when(
       str_detect(hypertension, "pre|Pre") |
         str_detect(diabetes_mellitus, "pre|Pre") |
@@ -141,7 +156,7 @@ clinical_cleaning <- function(data) {
 }
 
 clinical <- clinical_cleaning(data = clinical)
-
+write_rds(clinical, "clinical.rds")
 
 ################################################################################################# IV ### Bind df----
 radiomics <- full_join(features, clinical, by = "patient_id") %>% 
