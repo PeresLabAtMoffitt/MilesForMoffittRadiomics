@@ -1,5 +1,5 @@
 # Load packages
-
+library(tidyverse)
 library(tidymodels)
 # library(broom.mixed) # for converting bayesian models to tidy tibbles
 # library(dotwhisker)  # for visualizing regression results
@@ -42,7 +42,8 @@ mldata <- mldata %>%
   # Clean not meaningful var
   select(everything(), -c(contains("date")), 
          c(baseline_ct_scan_date, date_of_first_neoadjuvant_chemot, date_of_first_surgery, date_of_first_adjuvant_chemother)) %>% 
-  select(-c(subject_number, comment_for_cardiac_comorbidity)) # tumor_sequence_number, recurrence_time
+  select(-c(subject_number, comment_for_cardiac_comorbidity), # tumor_sequence_number, recurrence_time
+         TNM = "_tnm_edition_number_must_use_") 
 
 # Cleaning
 rm(concordance, stable_features)
@@ -70,15 +71,9 @@ data_recipe <-
   step_dummy(all_nominal(),  -all_outcomes()) %>%
   # Feature engineering on dates
   step_date(all_of(meaningful_dates), features = c("year", "month")) %>% 
-  step_rm(meaningful_dates)
+  step_rm(meaningful_dates, Gender)
 
-a <- summary(data_recipe)
-
-data_recipe %>% select(all_nominal())
-
-
-
-
+summary(data_recipe)
 
 # estimate the required parameters from a training set that can be later applied to other data sets.
 # learn what the model should be with the training data
@@ -126,6 +121,49 @@ rf_mod <- rand_forest(mode = "classification") %>%
 rf_mod <- rf_mod %>% #train_data %>% 
   fit(has_the_patient_recurred_ ~ ., data = train_data)
 # neural network
+
+
+
+
+# Evaluate model
+
+results_train <- mod %>% 
+  predict(new_data = train_data) %>% 
+  mutate(truth = train_data$recurrence, model = "glmet") %>% 
+  bind_rows(rf_mod %>% 
+              predict(new_data = train_data) %>% 
+              mutate(truth = train_data$recurrence, model = "rf"))
+
+results_test <- mod %>% 
+  predict(new_data = test_data) %>% 
+  mutate(truth = train_data$recurrence, model = "glmet") %>% 
+  bind_rows(rf_mod %>% 
+              predict(new_data = test_data) %>% 
+              mutate(truth = train_data$recurrence, model = "rf"))
+
+# Measure ho they performed
+
+results_train %>% 
+  group_by(model) %>% 
+  rmse(truth = truth, estimate = .prod) # .estimate = rootmean square error is lower so do better
+
+results_test %>% 
+  group_by(model) %>% 
+  rmse(truth = truth, estimate = .prod) # .est same as train so didn't overfit
+# if rf becore bigger than the one for training
+
+
+results_test %>% 
+  mutate(train = "testing") %>% 
+  bind_rows(results_train %>% mutate(train = "training")) %>% 
+  ggplot(aes(truth, .prod, color = model)) +
+  geom_abline(lty = 2, color = "grey80", size = 1.5)+
+  geom_point(alpha = 0.5)+
+  facet_wrap( ~ train)
+
+
+
+
 
 
 
