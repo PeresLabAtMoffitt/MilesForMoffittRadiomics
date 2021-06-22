@@ -8,7 +8,25 @@ library(tidymodels)
 ############################################################################### I ### Data prepping
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
 
-clinical <- read_rds("clinical.rds")
+clinical <- read_rds("clinical.rds") %>% select(-Gender) %>% 
+  select(-c(tnm_cs_mixed_group_stage, ecog_pretrt, ecog_posttrt, ecog_recurr, 
+            months_at_first_neoadjuvant_chem, months_at_first_adjuvant_chem, months_at_first_chemo, 
+            months_at_first_surgery, age_at_surgery, age_at_first_recurrence, month_at_first_recurrence_Dx, 
+            months_at_surg_followup, months_at_neo_followup, months_at_chem_followup, months_of_surg_rec_free, 
+            months_of_neo_rec_free, months_of_chem_rec_free, baseline_ctscan_outside_moffitt,
+            Ethnicity, grade_differentiation, germline_brca1_mutation, germline_brca2_mutation, somatic_brca1_mutation,
+            somatic_brca2_mutation, any_unclassified_brca_mutation,
+            contrast_enhancement, w_wo_contrast, chronic_kidney_disease,
+            
+            # Include as year, month?
+            date_of_first_neoadjuvant_chemot,
+            date_of_first_surgery, date_of_first_adjuvant_chemother,
+            
+            months_of_dx_rec_free, recurrence_time, months_of_treat_rec_free, os_time
+            ))
+
+
+
 
 # Select column name of stable features in the data
 concordance <- read_rds("concordance.rds") %>% 
@@ -40,13 +58,14 @@ meaningful_dates <-
 
 mldata <- mldata %>% 
   # Clean not meaningful var
-  select(everything(), -c(contains("date")), 
-         c(baseline_ct_scan_date, date_of_first_neoadjuvant_chemot, date_of_first_surgery, date_of_first_adjuvant_chemother)) %>% 
+  select(everything(), -c(contains("date"))#, 
+         # c(baseline_ct_scan_date, date_of_first_neoadjuvant_chemot, date_of_first_surgery, date_of_first_adjuvant_chemother)
+         ) %>% 
   select(-c(subject_number, comment_for_cardiac_comorbidity), # tumor_sequence_number, recurrence_time
          TNM = "_tnm_edition_number_must_use_") 
 
 # Cleaning
-rm(concordance, stable_features)
+# rm(concordance, stable_features)
 
 
 ############################################################################### II ### Build model
@@ -68,10 +87,11 @@ data_recipe <-
   update_role(mrn, new_role = "ID") %>% 
   # change all factor to dummy variables
   # step_impute_mode(all_nominal(),, all_predictors()) %>% 
-  step_dummy(all_nominal(),  -all_outcomes()) %>%
+  step_dummy(all_nominal(),  -all_outcomes()) # %>%
+  
   # Feature engineering on dates
-  step_date(all_of(meaningful_dates), features = c("year", "month")) %>% 
-  step_rm(meaningful_dates, Gender)
+  # step_date(all_of(meaningful_dates), features = c("year", "month")) %>% 
+  # step_rm(meaningful_dates)
 
 summary(data_recipe)
 
@@ -80,6 +100,101 @@ summary(data_recipe)
 mldata_prep <- prep(data_recipe, verbose = TRUE, log_changes = TRUE)
 # Extract Finalized Training Set
 juiced <- juice(mldata_prep)
+
+# Build model specification
+tune_spec <- rand_forest(
+  # tune right value for the number of predictors that will be randomly sampled at each split when creating the tree models
+  mtry = tune(), 
+  trees = 1000,
+  # tune right value for the minimum number of data points in a node that are required for the node to be split further.
+  min_n = tune()
+) %>% 
+  set_mode("classification") %>% 
+  set_engine("ranger")
+
+tune_wf <- workflow() %>% 
+  add_recipe(data_recipe) %>% # add unpreped recipe
+  add_model(tune_spec)
+
+# train hyperparameter
+set.seed(123)
+# 10 fold cross validation
+data_folds <- vfold_cv(train_data)
+
+doParallel::registerDoParallel() # Because not patient, parallel processing
+set.seed(123)
+# 
+tune_results <- tune_grid( # will tune mtry and min_m on a grid
+  tune_wf, # tune worflow
+  resamples = data_folds, # on this data
+  grid = 20 # do 20 point
+)
+
+tune_results %>% 
+  collect_metrics() %>% 
+  filter(.metric == "roc_auc") %>% 
+  select(mean, min_n, mtry) %>% 
+  pivot_longer(min_n:mtry,
+               values_to = "value",
+               names_to = "param") %>% 
+  ggplot(aes(value, mean, color = param)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap( . ~ param, scales = "free_x")
+
+tune_results %>% select_best("accuracy")
+
+# Tune more?
+# Can make a regular grid
+new_grid <- grid_regular(
+  mtry(range = c(25, 75)),
+  min_n(range = c(0, 25)),
+  levels = 10
+)
+
+set.seed(123)
+sec_tune_results <- tune_grid( # will tune mtry and min_m on a grid
+  tune_wf, # tune worflow
+  resamples = data_folds, # on this data
+  grid = new_grid
+)
+
+sec_tune_results %>% collect_metrics() %>% 
+  filter(.metric == "roc_auc") %>% 
+  mutate(min_n = factor(min_n)) %>% 
+  ggplot(aes(mtry, mean, color = min_n)) +
+  geom_line(alpha = 0.5, size = 1.5) +
+  geom_point()
+
+best_auc <- select_best(sec_tune_results, "roc_auc")
+
+final_rf <- finalize_model(tune_spec,
+               best_auc)
+
+library(vip)
+
+final_rf %>% 
+  set_engine("ranger", importance = "permutation") %>% 
+  fit(has_the_patient_recurred_ ~ .,
+      data = juice(mldata_prep) %>% select(-mrn)) %>% 
+  vip(geom = "point")
+
+final_wf <- workflow() %>% 
+  add_recipe(data_recipe) %>% 
+  add_model(final_rf)
+
+final_results <- final_wf %>% 
+  last_fit(data_split)
+
+final_results %>% 
+  collect_metrics()
+
+final_results %>% collect_predictions() %>% 
+  mutate(is_predicton_correct = case_when(
+    has_the_patient_recurred_ == .pred_class     ~ "Cool!",
+    TRUE                                        ~ ":("
+  )) %>% 
+  ggplot(aes(is_predicton_correct))+
+  geom_bar()
 
 
 
