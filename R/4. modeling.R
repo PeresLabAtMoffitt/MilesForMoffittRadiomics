@@ -4,31 +4,87 @@ library(tidymodels)
 # library(broom.mixed) # for converting bayesian models to tidy tibbles
 # library(dotwhisker)  # for visualizing regression results
 
-
-############################################################################### I ### Data prepping
+############################################################################### I ### Exploratory Data Analysis
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
 
-clinical <- read_rds("clinical.rds") %>% select(-Gender) %>% 
-  select(-c(tnm_cs_mixed_group_stage, ecog_pretrt, ecog_posttrt, ecog_recurr, 
-            months_at_first_neoadjuvant_chem, months_at_first_adjuvant_chem, months_at_first_chemo, 
-            months_at_first_surgery, age_at_surgery, age_at_first_recurrence, month_at_first_recurrence_Dx, 
-            months_at_surg_followup, months_at_neo_followup, months_at_chem_followup, months_of_surg_rec_free, 
-            months_of_neo_rec_free, months_of_chem_rec_free, baseline_ctscan_outside_moffitt,
-            Ethnicity, grade_differentiation, germline_brca1_mutation, germline_brca2_mutation, somatic_brca1_mutation,
-            somatic_brca2_mutation, any_unclassified_brca_mutation,
-            contrast_enhancement, w_wo_contrast, chronic_kidney_disease,
+# No NA in features
+
+# Clinical
+clinical <- read_rds("clinical.rds")
+
+# recurrence by age or year
+library(GGally)
+
+clinical %>% 
+  select(has_the_patient_recurred_, year_of_diagnosis, treatment_type, debulking_status,
+         age_at_Dx, primary_site) %>% 
+  ggpairs(columns = 2:ncol(.), aes(color = has_the_patient_recurred_, alpha = 0.5))
+
+clinical %>% 
+  select(has_the_patient_recurred_, treatment_type, debulking_status,
+         primary_site, year_of_diagnosis, age_at_Dx) %>% 
+  mutate(year_of_diagnosis = as.character(year_of_diagnosis)) %>%
+  mutate(age_at_Dx = as.character(age_at_Dx)) %>%
+  pivot_longer(2:ncol(.)) %>% 
+  ggplot(aes(y = value, fill = has_the_patient_recurred_)) +
+  geom_bar(position = "fill")+
+  facet_wrap(vars(name), scales = "free")+
+  labs(x= NULL, y = NULL)
+
+clinical %>% 
+  group_by(year_of_diagnosis) %>% 
+  summarise(recurred = sum(rec_event)) %>%
+  ggplot(aes(year_of_diagnosis, recurred))+
+  geom_line()
+
+library(naniar)
+
+clinical %>% 
+  select(has_the_patient_recurred_, ecog_pretrt, ecog_posttrt, ecog_recurr, 
+         Ethnicity, grade_differentiation) %>%
+  gg_miss_upset()
+# Will do unknown, remove ecog
+
+clinical %>% 
+  select(has_the_patient_recurred_, germline_brca1_mutation, germline_brca2_mutation, somatic_brca1_mutation,
+         somatic_brca2_mutation, any_unclassified_brca_mutation) %>%
+  gg_miss_upset()
+# Will do unknown, remove any_unclassified_brca_mutation
+
+clinical %>% 
+  select(hypertension, diabetes_mellitus, hypercholesterolemia,
+         chronic_kidney_disease, cardiac_conditions_including_bu) %>%
+  gg_miss_upset()
+
+############################################################################### II ### Data prepping
+# remove variables non meaningful or redundant to recurrence
+clinical_ml <- read_rds("clinical.rds") %>% 
+  select(-c(Gender, subject_number, '_tnm_edition_number_must_use_', baseline_ctscan_outside_moffitt, 
+         date_of_birth, any_unclassified_brca_mutation,
+         comment_for_cardiac_comorbidity,
+         has_the_patient_recurred_after_surg,
+         months_at_first_neoadjuvant_chem, months_at_first_adjuvant_chem, months_at_first_chemo, 
+         months_at_first_surgery, age_at_surgery, age_at_first_recurrence, month_at_first_recurrence_Dx, 
+         months_at_surg_followup, months_at_neo_followup, months_at_chem_followup, months_of_surg_rec_free, 
+         months_of_neo_rec_free, months_of_chem_rec_free,
+         months_of_dx_rec_free, recurrence_time, months_of_treat_rec_free, 
+         os_time, rec_event, os_event, 
+         has_the_patient_recurred_after_surg
+  )) %>% 
+  
+  select(-c(ecog_pretrt, ecog_posttrt, ecog_recurr, 
             
+            germline_brca1_mutation, germline_brca2_mutation, somatic_brca1_mutation,
+            somatic_brca2_mutation,
+
+            contrast_enhancement, # What is the difference with w_w...
+            tumor_sequence_number, 
             # Include as year, month?
             date_of_first_neoadjuvant_chemot,
             date_of_first_surgery, date_of_first_adjuvant_chemother,
-            
-            months_of_dx_rec_free, recurrence_time, months_of_treat_rec_free, os_time
             ))
 
-
-
-
-# Select column name of stable features in the data
+# Select column name of stable features from the radiomics data
 concordance <- read_rds("concordance.rds") %>% 
   filter(value_CCC >= 0.95) %>% 
   select(name) %>% 
@@ -40,58 +96,71 @@ stable_features <- paste0(paste("nor_", concordance$stable_features, "[a-z]", se
 #          "/data/Merge clinical and radiomics data/Ovarian_Normalized_Radiomics_Features_05242021.csv")) #%>% 
 #   select(matches(stable_features))
 
-# radiomics <- read_rds("radiomics.rds")
 mldata <- read_rds("radiomics.rds") %>% 
   select(mrn, matches(stable_features)) %>% 
-  left_join(., clinical, by = "mrn") %>% 
-  drop_na(starts_with("nor")) %>% 
-  # it is important that the outcome variable for training a (logistic) regression model is a factor.
-  mutate_if(is.character, as.factor)
+  left_join(., clinical_ml, by = "mrn")
 
 # Explore what will need to be changed
 skimr::skim(mldata)
-# warning for date variable
-meaningful_dates <- 
-  c("baseline_ct_scan_date", "date_of_first_neoadjuvant_chemot", 
-    "date_of_first_surgery", "date_of_first_adjuvant_chemother")
-
-
-mldata <- mldata %>% 
-  # Clean not meaningful var
-  select(everything(), -c(contains("date"))#, 
-         # c(baseline_ct_scan_date, date_of_first_neoadjuvant_chemot, date_of_first_surgery, date_of_first_adjuvant_chemother)
-         ) %>% 
-  select(-c(subject_number, comment_for_cardiac_comorbidity), # tumor_sequence_number, recurrence_time
-         TNM = "_tnm_edition_number_must_use_") 
 
 # Cleaning
 # rm(concordance, stable_features)
 
 
 ############################################################################### II ### Build model
+# Build the dataset
+# warning for date variable
+meaningful_dates <- 
+  c("baseline_ct_scan_date", "date_of_first_neoadjuvant_chemot", 
+    "date_of_first_surgery", "date_of_first_adjuvant_chemother")
+mldata <- mldata %>% 
+  drop_na(starts_with("nor")) %>% 
+  select(-c(contains("date")#,
+            # meaningful_dates
+  )) %>% 
+  # it is important that the outcome variable for training a (logistic) regression model is a factor.
+  mutate_if(is.character, as.factor)
+
+skimr::skim(mldata)
+
+
 set.seed(1234)
 
 # 1. Splitting the data
 # 3/4 of the data into the training set but split evenly winthin race
-data_split <- initial_split(mldata, prop = 3/4, strata = Race) # w_wo_contrast
-
-# Create data frames for the two sets:
+data_split <- initial_split(mldata, prop = 3/4, strata = w_wo_contrast)
+# Create training and testing datasets:
 train_data <- training(data_split)
 test_data  <- testing(data_split)
 
-# 2. Recipe for data pre processing
+library(themis)
+# 2. Data pre processing and features engineering + imputation
 # Recipe
 data_recipe <-
+  # 1.model formula
   recipe(has_the_patient_recurred_ ~ ., data = train_data)  %>% 
-  # keep these variables but not use them as either outcomes or predictors
+  # 2.keep these variables but not use them as either outcomes or predictors
+  # Keep id but not include in the model as predictor
   update_role(mrn, new_role = "ID") %>% 
-  # change all factor to dummy variables
-  # step_impute_mode(all_nominal(),, all_predictors()) %>% 
-  step_dummy(all_nominal(),  -all_outcomes()) # %>%
+  # remove variables that contain only a single value.
+  step_zv(all_predictors()) %>% 
+  # 3.If factor with too much levels, collapse lower levels
+  step_other(Histology, threshold = 0.05) %>% 
+  # data_recipe %>% prep() %>% juice() %>% count(Histology)
+  
+  # 4.Imputation
+  step_unknown(all_nominal_predictors()) %>% 
+  # data_recipe %>% prep() %>% juice() %>% count(grade_differentiation)
+  
+  # 5.change all factor to dummy variables for model that cannot handle factor variables
+  step_dummy(all_nominal(), -all_outcomes()) #%>%
   
   # Feature engineering on dates
   # step_date(all_of(meaningful_dates), features = c("year", "month")) %>% 
   # step_rm(meaningful_dates)
+  
+  # LAST.For imbalance, model memorize the few example and
+  # step_smote(Race) # Use nearest neighbor to create new synthetic observation almost similar 
 
 summary(data_recipe)
 
@@ -100,6 +169,18 @@ summary(data_recipe)
 mldata_prep <- prep(data_recipe, verbose = TRUE, log_changes = TRUE)
 # Extract Finalized Training Set
 juiced <- juice(mldata_prep)
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Build model specification
 tune_spec <- rand_forest(
@@ -113,9 +194,10 @@ tune_spec <- rand_forest(
   set_engine("ranger")
 
 tune_wf <- workflow() %>% 
-  add_recipe(data_recipe) %>% # add unpreped recipe
+  add_recipe(data_recipe) %>% # add unpreped recipe, is an unfit model at the end of this line
   add_model(tune_spec)
 
+############################################################################### II ### Data Tuning 
 # train hyperparameter
 set.seed(123)
 # 10 fold cross validation
@@ -128,7 +210,10 @@ tune_results <- tune_grid( # will tune mtry and min_m on a grid
   tune_wf, # tune worflow
   resamples = data_folds, # on this data
   grid = 20 # do 20 point
-)
+)# May need to add specificity and sensitivity to metrics because we have rare events. these 2 will tell us how the model did for our positive and negative cases
+# If sens is low it means the model had a really hard time finding the rare case (could mean step_smor is bad idea for this model)
+
+
 
 tune_results %>% 
   collect_metrics() %>% 
@@ -198,23 +283,9 @@ final_results %>% collect_predictions() %>%
 
 
 
-############################################################################### II ### Data Tuning 
 
 
 ############################################################################### II ### Machine Learning
-
-
-  
-
-
-
-# # 2. Splitting the data
-# # 3/4 of the data into the training set but split evenly winthin race
-# data_split <- initial_split(radiomics1, prop = 3/4, strata = c(race, w_wo_contrast))
-# 
-# # Create data frames for the two sets:
-# train_data <- training(data_split)
-# test_data  <- testing(data_split)
 
 
 
@@ -239,8 +310,8 @@ rf_mod <- rf_mod %>% #train_data %>%
 
 
 
+############################################################################### II ### Model Evaluation 
 
-# Evaluate model
 
 results_train <- mod %>% 
   predict(new_data = train_data) %>% 
@@ -256,7 +327,7 @@ results_test <- mod %>%
               predict(new_data = test_data) %>% 
               mutate(truth = train_data$recurrence, model = "rf"))
 
-# Measure ho they performed
+# Measure how they performed
 
 results_train %>% 
   group_by(model) %>% 
