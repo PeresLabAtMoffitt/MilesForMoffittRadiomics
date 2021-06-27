@@ -3,6 +3,8 @@ library(tidyverse)
 library(tidymodels)
 # library(broom.mixed) # for converting bayesian models to tidy tibbles
 # library(dotwhisker)  # for visualizing regression results
+library(themis) # step_smote
+
 
 ############################################################################### I ### Exploratory Data Analysis
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
@@ -62,7 +64,7 @@ clinical_ml <- read_rds("clinical.rds") %>%
   select(-c(Gender, subject_number, '_tnm_edition_number_must_use_', baseline_ctscan_outside_moffitt, 
          date_of_birth, any_unclassified_brca_mutation,
          comment_for_cardiac_comorbidity,
-         has_the_patient_recurred_after_surg,
+         has_the_patient_recurred_after_surg, vital_new,
          months_at_first_neoadjuvant_chem, months_at_first_adjuvant_chem, months_at_first_chemo, 
          months_at_first_surgery, age_at_surgery, age_at_first_recurrence, month_at_first_recurrence_Dx, 
          months_at_surg_followup, months_at_neo_followup, months_at_chem_followup, months_of_surg_rec_free, 
@@ -118,6 +120,7 @@ mldata <- mldata %>%
   select(-c(contains("date")#,
             # meaningful_dates
   )) %>% 
+  mutate(tnm_cs_mixed_group_stage = as.character(tnm_cs_mixed_group_stage)) %>% 
   # it is important that the outcome variable for training a (logistic) regression model is a factor.
   mutate_if(is.character, as.factor)
 
@@ -133,10 +136,9 @@ data_split <- initial_split(mldata, prop = 3/4, strata = w_wo_contrast)
 train_data <- training(data_split)
 test_data  <- testing(data_split)
 
-library(themis)
 # 2. Data pre processing and features engineering + imputation
 # Recipe
-data_recipe <-
+mldata_recipe <-
   # 1.model formula
   recipe(has_the_patient_recurred_ ~ ., data = train_data)  %>% 
   # 2.keep these variables but not use them as either outcomes or predictors
@@ -151,7 +153,6 @@ data_recipe <-
   # 4.Imputation
   step_unknown(all_nominal_predictors()) %>% 
   # data_recipe %>% prep() %>% juice() %>% count(grade_differentiation)
-  
   # 5.change all factor to dummy variables for model that cannot handle factor variables
   step_dummy(all_nominal(), -all_outcomes()) #%>%
   
@@ -162,60 +163,63 @@ data_recipe <-
   # LAST.For imbalance, model memorize the few example and
   # step_smote(Race) # Use nearest neighbor to create new synthetic observation almost similar 
 
-summary(data_recipe)
+summary(mldata_recipe)
 
 # estimate the required parameters from a training set that can be later applied to other data sets.
 # learn what the model should be with the training data
-mldata_prep <- prep(data_recipe, verbose = TRUE, log_changes = TRUE)
+mldata_prep <- prep(mldata_recipe, verbose = TRUE, log_changes = TRUE)
 # Extract Finalized Training Set
 juiced <- juice(mldata_prep)
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Build model specification
-tune_spec <- rand_forest(
-  # tune right value for the number of predictors that will be randomly sampled at each split when creating the tree models
-  mtry = tune(), 
-  trees = 1000,
-  # tune right value for the minimum number of data points in a node that are required for the node to be split further.
-  min_n = tune()
-) %>% 
-  set_mode("classification") %>% 
-  set_engine("ranger")
-
-tune_wf <- workflow() %>% 
-  add_recipe(data_recipe) %>% # add unpreped recipe, is an unfit model at the end of this line
-  add_model(tune_spec)
 
 ############################################################################### II ### Data Tuning 
 # train hyperparameter
 set.seed(123)
 # 10 fold cross validation
-data_folds <- vfold_cv(train_data)
+mldata_folds <- vfold_cv(train_data)
 
+# Build model specification
+ranger_spec <- rand_forest(
+  # tune right value for the number of predictors that will be randomly sampled at each split when creating the tree models
+  mtry = tune(), 
+  # tune right value for the minimum number of data points in a node that are required for the node to be split further.
+  min_n = tune(),
+  trees = 1000) %>% 
+  set_mode("classification") %>% 
+  set_engine("ranger")
+
+# Set up a work flow
+ranger_workflow <- 
+  workflow() %>% 
+  add_recipe(mldata_recipe) %>% # add un-prepped recipe, is an unfit model at the end of this line
+  add_model(ranger_spec) # add our model specification
+
+# Tuning
+set.seed(54691)
 doParallel::registerDoParallel() # Because not patient, parallel processing
-set.seed(123)
-# 
-tune_results <- tune_grid( # will tune mtry and min_m on a grid
-  tune_wf, # tune worflow
-  resamples = data_folds, # on this data
-  grid = 20 # do 20 point
-)# May need to add specificity and sensitivity to metrics because we have rare events. these 2 will tell us how the model did for our positive and negative cases
-# If sens is low it means the model had a really hard time finding the rare case (could mean step_smor is bad idea for this model)
+# will tune mtry and min_m on a grid
+ranger_tune <-
+  tune_grid(ranger_workflow, # Will take our workflow and apply it on
+            resamples = mldata_folds, # each fold of the data for 
+            grid = 20) # How many candidate point do I want to try
+# Try the 20 point with each min_n and mtry
+# Then train on analysis cv and assessed on the test of cv
+# will compute performance matrix on each of these of the 20 candidate model
+
+# May need to add specificity and sensitivity to metrics if we have rare events. these 2 will tell us how the model did for our positive and negative cases
+# If sens is low it means the model had a really hard time finding the rare case (could mean step_smote is bad idea for this model)
 
 
+############################################################################### II ### Explore Tuning Results
 
-tune_results %>% 
+show_best(ranger_tune, metric = "roc_auc")
+show_best(ranger_tune, metric = "accuracy")
+
+# Visualize tuned parameters
+autoplot(ranger_tune)
+# mtry is the number of predictor randomly selected -> needs to be 
+# mim_n is the minimal node size -> needs to be small
+
+ranger_tune %>% 
   collect_metrics() %>% 
   filter(.metric == "roc_auc") %>% 
   select(mean, min_n, mtry) %>% 
@@ -226,54 +230,92 @@ tune_results %>%
   geom_point(show.legend = FALSE) +
   facet_wrap( . ~ param, scales = "free_x")
 
-tune_results %>% select_best("accuracy")
+ranger_tune %>% select_best("accuracy")
 
-# Tune more?
-# Can make a regular grid
-new_grid <- grid_regular(
-  mtry(range = c(25, 75)),
-  min_n(range = c(0, 25)),
-  levels = 10
-)
+# # Tune more?
+# # Can make a regular grid
+# new_grid <- grid_regular(
+#   mtry(range = c(25, 75)),
+#   min_n(range = c(0, 25)),
+#   levels = 10
+# )
+# 
+# set.seed(123)
+# sec_tune_results <- tune_grid( # will tune mtry and min_m on a grid
+#   tune_wf, # tune worflow
+#   resamples = data_folds, # on this data
+#   grid = new_grid
+# )
+# 
+# sec_tune_results %>% collect_metrics() %>% 
+#   filter(.metric == "roc_auc") %>% 
+#   mutate(min_n = factor(min_n)) %>% 
+#   ggplot(aes(mtry, mean, color = min_n)) +
+#   geom_line(alpha = 0.5, size = 1.5) +
+#   geom_point()
 
-set.seed(123)
-sec_tune_results <- tune_grid( # will tune mtry and min_m on a grid
-  tune_wf, # tune worflow
-  resamples = data_folds, # on this data
-  grid = new_grid
-)
+# Step Finalize the model with our tuned parameters
+best_auc <- select_best(ranger_tune, # or sec_tune_results if tuned more,
+                        "roc_auc")
 
-sec_tune_results %>% collect_metrics() %>% 
-  filter(.metric == "roc_auc") %>% 
-  mutate(min_n = factor(min_n)) %>% 
-  ggplot(aes(mtry, mean, color = min_n)) +
-  geom_line(alpha = 0.5, size = 1.5) +
-  geom_point()
+final_rf <- finalize_model(ranger_spec,
+                           best_auc)
+# Aka same
+final_rf <- ranger_spec %>% 
+  finalize_model(select_best(ranger_tune, "roc_auc"))
+final_rf
 
-best_auc <- select_best(sec_tune_results, "roc_auc")
+final_rf <- ranger_workflow %>% 
+  finalize_workflow(select_best(ranger_tune, "roc_auc"))
 
-final_rf <- finalize_model(tune_spec,
-               best_auc)
 
-library(vip)
+# Calculate Performance Metrics
+#Plot the ROC curve
+rf_results <- final_rf %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
+  )
 
-final_rf %>% 
-  set_engine("ranger", importance = "permutation") %>% 
-  fit(has_the_patient_recurred_ ~ .,
-      data = juice(mldata_prep) %>% select(-mrn)) %>% 
-  vip(geom = "point")
+collect_metrics(rf_results)
+# Accuracy is llow
+# Sensitivity has 50% chance finding the minority class pop
+rf_results %>% 
+  conf_mat_resampled()
+# 
 
-final_wf <- workflow() %>% 
-  add_recipe(data_recipe) %>% 
-  add_model(final_rf)
+rf_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred_, `.pred_No Recurrence`) %>% 
+  autoplot()
 
-final_results <- final_wf %>% 
+rf_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred_, .pred_Recurrence) %>% 
+  autoplot()
+
+
+
+# Step finalize Fit : fitting to the whole training and evaluating on the testing data
+final_fit <- final_rf %>% 
   last_fit(data_split)
 
-final_results %>% 
+# Step Explore the model
+# Collect metrics and compare number with the metrics from the training
+# Can see if lower or higher...overfit our data, etc
+final_fit %>% 
   collect_metrics()
+# Compare to the training prvious number
+show_best(ranger_tune, metric = "roc_auc")
+# Test data is a littke lower with samll SD
 
-final_results %>% collect_predictions() %>% 
+
+
+# Step Explore the prediction
+final_fit %>% collect_predictions() %>% 
   mutate(is_predicton_correct = case_when(
     has_the_patient_recurred_ == .pred_class     ~ "Cool!",
     TRUE                                        ~ ":("
@@ -281,17 +323,47 @@ final_results %>% collect_predictions() %>%
   ggplot(aes(is_predicton_correct))+
   geom_bar()
 
+final_fit %>% collect_predictions() %>% 
+  ggplot(aes(has_the_patient_recurred_, .pred_class))+
+  geom_point() +
+  geom_abline()
+
+# Predict on 1 element or new data
+predict(final_fit$.workflow[[1]], test_data[15,]) 
+# Here to test on the 15th element of the test data by itself
+
+
+# Step Explore of features importance
+library(vip) 
+
+# Need to train the model one more time but without tuning to go faster
+importance_spec <- ranger_spec %>% 
+  finalize_model(select_best(ranger_tune, "roc_auc")) %>% 
+  set_engine("ranger", importance = "permutation") # permutation based importance
+
+# represents the mean decrease in node impurity (and not the mean decrease in accuracy)
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  pull_workflow_fit() %>% 
+  vip(aesthetics = list(alpha = 0.5, fill = "midnightblue"),
+      # geom = "point",
+      num_features = 20
+      )
 
 
 
 
-############################################################################### II ### Machine Learning
 
 
 
 
-# Do we need dummy variable aka %>% 
-# step_dummy(all_nominal(), -all_outcomes())
+
+############################################################################### II ### logistic reg
+
+
+
 
 
 # logistic reg
