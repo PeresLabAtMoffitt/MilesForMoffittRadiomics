@@ -153,7 +153,7 @@ mldata_recipe <-
   # 4.Imputation
   step_unknown(all_nominal_predictors()) %>% 
   # data_recipe %>% prep() %>% juice() %>% count(grade_differentiation)
-  # 5.change all factor to dummy variables for model that cannot handle factor variables
+  # 5.change all factor to indicator/dummy variables for model that cannot handle factor variables
   step_dummy(all_nominal(), -all_outcomes()) #%>%
   
   # Feature engineering on dates
@@ -361,6 +361,19 @@ workflow() %>%
 
 
 ############################################################################### II ### logistic reg
+
+glm_spec <- logistic_reg() %>% 
+  set_engine("glm")
+
+# Set up a work flow
+ranger_workflow <- 
+  workflow() %>% 
+  add_recipe(mldata_recipe) %>% # add un-prepped recipe, is an unfit model at the end of this line
+  add_model(glm_spec)
+
+# Tune?
+
+
 
 
 
