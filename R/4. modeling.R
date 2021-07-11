@@ -190,7 +190,8 @@ ranger_spec <- rand_forest(
 # Set up a work flow
 ranger_workflow <- 
   workflow() %>% 
-  add_recipe(mldata_recipe) %>% # add un-prepped recipe, is an unfit model at the end of this line
+  # Add preprocessor
+  add_recipe(mldata_recipe) %>% # here is an unfit mode
   add_model(ranger_spec) # add our model specification
 
 # Tuning
@@ -362,16 +363,198 @@ workflow() %>%
 
 ############################################################################### II ### logistic reg
 
-glm_spec <- logistic_reg() %>% 
-  set_engine("glm")
+# Tune lambda
 
-# Set up a work flow
-ranger_workflow <- 
+# logistic reg, choose regularized log reg with mixture 1 for Lasso model
+# Because lots of var for few rows (samples) but don't know which vars are important
+
+# Find the optimal value of lambda that minimizes the cross-validation error
+# Need to prep data differently
+train_data_lambda <- training(data_split) %>% 
+  drop_na()
+
+# Dummy code categorical predictor variables
+x <- model.matrix(has_the_patient_recurred_ ~ ., data = train_data_lambda)[,-1]
+# Convert the outcome (class) to a numerical variable
+y <- ifelse(train_data_lambda$has_the_patient_recurred_ == "Recurrence", 1, 0)
+
+library(glmnet)
+set.seed(123)
+cv.lasso <- cv.glmnet(x, y, alpha = 1, family = "binomial")
+plot(cv.lasso)
+cv.lasso$lambda.min
+# The left dashed vertical line indicates that the log of the optimal value of lambda is approximately -4, 
+# which is the one that minimizes the prediction error. This lambda value will give the most accurate model.
+cv.lasso$lambda.1se
+# Fit the final model on the training data
+model <- glmnet(x, y, alpha = 1, family = "binomial",
+                lambda = cv.lasso$lambda.min)
+# Display regression coefficients
+coef(model)
+
+library(usemodels) # Gives a scaffolding of the modelling code
+use_glmnet(has_the_patient_recurred_ ~ ., data = train_data)
+
+glmnet_recipe <- 
+  recipe(formula = has_the_patient_recurred_ ~ ., data = train_data) %>% 
+  step_novel(all_nominal(), -all_outcomes()) %>% 
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors(), -all_nominal()) 
+
+glmnet_spec <- 
+  logistic_reg(penalty = tune(), mixture = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet") 
+
+glmnet_workflow <- 
   workflow() %>% 
-  add_recipe(mldata_recipe) %>% # add un-prepped recipe, is an unfit model at the end of this line
-  add_model(glm_spec)
+  add_recipe(mldata_recipe) %>% 
+  add_model(glmnet_spec) 
 
-# Tune?
+glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20), mixture = c(0.05, 
+                                                                                      0.2, 0.4, 0.6, 0.8, 1)) 
+
+glmnet_tune <- 
+  tune_grid(glmnet_workflow, resamples = mldata_folds, grid = glmnet_grid) 
+
+############################################################################### II ### Explore Tuning Results
+
+show_best(glmnet_tune, metric = "roc_auc")
+show_best(glmnet_tune, metric = "accuracy")
+
+# Visualize tuned parameters
+autoplot(glmnet_tune)
+# mtry is the number of predictor randomly selected -> needs to be 
+# mim_n is the minimal node size -> needs to be small
+
+glmnet_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "accuracy") %>% 
+  select(mean, penalty, mixture) %>% 
+  pivot_longer(penalty:mixture,
+               values_to = "value",
+               names_to = "param") %>% 
+  ggplot(aes(value, mean, color = param)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap( . ~ param, scales = "free_x")
+
+glmnet_tune %>% select_best("accuracy")
+
+# Step Finalize the model with our tuned parameters
+best_acc <- select_best(glmnet_tune, # or sec_tune_results if tuned more,
+                        "accuracy")
+
+final_glmnet <- finalize_model(glmnet_spec,
+                               best_acc)
+# Aka same
+final_glmnet <- glmnet_spec %>% 
+  finalize_model(select_best(glmnet_tune, "accuracy"))
+final_glmnet
+
+final_glmnet <- glmnet_workflow %>% 
+  finalize_workflow(select_best(glmnet_tune, "accuracy"))
+
+
+# Calculate Performance Metrics again with our last tuned model
+#Plot the ROC curve
+glmnet_results <- final_glmnet %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
+  )
+
+collect_metrics(glmnet_results)
+# Accuracy is llow
+# Sensitivity has 50% chance finding the minority class pop
+glmnet_results %>% 
+  conf_mat_resampled()
+
+glmnet_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred_, `.pred_No Recurrence`) %>% 
+  autoplot()
+
+glmnet_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred_, .pred_Recurrence) %>% 
+  autoplot()
+
+
+
+# Step finalize Fit : fitting to the whole training and evaluating on the testing data
+final_glmnet_fit <- final_glmnet %>% 
+  last_fit(data_split)
+
+# Step Explore the model
+# Collect metrics and compare number with the metrics from the training
+# Can see if lower or higher...overfit our data, etc
+final_glmnet_fit %>% 
+  collect_metrics()
+# Compare to the training prvious number
+show_best(glmnet_tune, metric = "roc_auc")
+# Test data is a littke lower with samll SD
+
+
+
+# Step Explore the prediction
+final_glmnet_fit %>% collect_predictions() %>% 
+  mutate(is_predicton_correct = case_when(
+    has_the_patient_recurred_ == .pred_class     ~ "Cool!",
+    TRUE                                        ~ ":("
+  )) %>% 
+  ggplot(aes(is_predicton_correct))+
+  geom_bar()
+
+final_glmnet_fit %>% collect_predictions() %>% 
+  ggplot(aes(has_the_patient_recurred_, .pred_class))+
+  geom_point() +
+  geom_abline()
+
+# Predict on 1 element or new data
+predict(final_glmnet_fit$.workflow[[1]], test_data[15,]) 
+# Here to test on the 15th element of the test data by itself
+
+
+# Step Explore of features importance
+library(vip) 
+
+# Need to train the model one more time but without tuning to go faster
+importance_spec <- glmnet_spec %>% 
+  finalize_model(select_best(glmnet_tune, "roc_auc")) %>% 
+  set_engine("glmnet", importance = "permutation") # permutation based importance
+
+# represents the mean decrease in node impurity (and not the mean decrease in accuracy)
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  pull_workflow_fit() %>% 
+  vip(aesthetics = list(alpha = 0.5, fill = "midnightblue"),
+      # geom = "point",
+      num_features = 20
+  )
+
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  pull_workflow_fit() %>% 
+  vi() %>% 
+  mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance)) %>% 
+  ggplot(aes(x= desc(fct_reorder(Variable, abs(Importance)))  , y = Importance, fill = Sign)) +
+  geom_bar(stat = "identity")
+
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  pull_workflow_fit() %>% 
+  vi() %>% 
+  mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance))
 
 
 
@@ -379,19 +562,15 @@ ranger_workflow <-
 
 
 
-# logistic reg
 mod <-
   logistic_reg(penalty = 0.01, mixture = 1/3) %>%
   # now say how you want to fit the model and another other options
   set_engine("glmnet", nlambda = 10)
 translate(mod, engine = "glmnet")
-# Support vector machine
-# ramdom forest
-rf_mod <- rand_forest(mode = "classification") %>% 
-  set_engine("ranger")
-rf_mod <- rf_mod %>% #train_data %>% 
-  fit(has_the_patient_recurred_ ~ ., data = train_data)
-# neural network
+
+
+###############################################################################  Support vector machine # not necessary
+###############################################################################  neural network
 
 
 

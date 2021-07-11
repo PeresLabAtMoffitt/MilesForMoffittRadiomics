@@ -109,6 +109,8 @@ clinical_cleaning <- function(data) {
       str_detect(has_the_patient_recurred_, "Yes|yes")          ~ "Recurrence",
       str_detect(has_the_patient_recurred_, "No|no")           ~ "No Recurrence"
     )) %>%
+    mutate(has_the_patient_recurred_ = factor(has_the_patient_recurred_, 
+                                              levels = c("Recurrence", "No Recurrence")) ) %>% 
     
     # For survivals
     mutate(os_time = round(interval(start = date_of_diagnosis, end = fwdate_most_recent)/
