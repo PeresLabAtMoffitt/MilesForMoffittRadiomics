@@ -65,14 +65,40 @@ clinical <- clinical %>%
       tolower() %>% 
       str_replace_all(., "__", "_")
   ) %>% 
-  rename(Gender = "gender", Race = "race", Ethnicity = "ethnicity", Histology = "histology") %>% 
   mutate(across(where(is.character), .fns = ~ tolower(.))) %>%
   mutate(across(where(is.character), .fns = ~ capwords(.))) %>%
-  mutate(across(where(is.character), .fns = ~ str_replace(., "Unknown|unknown|NANA", NA_character_))) %>%
+  rename(Race = "race", Ethnicity = "ethnicity", Histology = "histology") %>%
+  mutate(Race = case_when(
+    Race %in% 
+      c("Other", "Asian", "Pacif", "Unko", 
+        "Filip", "Pakis")                                ~ "Other",
+    Race == "Unkno"                                      ~ "Unknown",
+    TRUE                                                 ~ Race
+  )) %>% 
+  mutate(Ethnicity = case_when(
+    Ethnicity == "Non-spanish"                           ~ "Non-Hispanic",
+    Ethnicity %in% 
+      c("Spanish Nos", "Puerto Rican", 
+        "Mexican", "Cuban", "South/centra")              ~ "Hispanic",
+    TRUE                                                 ~ Ethnicity
+  )) %>% 
+  mutate(raceeth = case_when(
+    Race == "White" &
+      Ethnicity == "Non-Hispanic"        ~ "White Non-Hispanic",
+    Race == "Black" &
+      Ethnicity == "Non-Hispanic"        ~ "Black Non-Hispanic",
+    Ethnicity == "Hispanic"              ~ "Hispanic",
+    Race %in% 
+      c("Other", "Unknown") |
+      Ethnicity == "Unknown"             ~ "Other/Unknown"
+  )) %>% 
+
+  
+  # mutate(across(where(is.character), .fns = ~ str_replace(., "NANA", NA_character_))) %>%
   mutate(date_of_first_adjuvant_chemother = as.POSIXct(date_of_first_adjuvant_chemother, format = "%m/%d/%y")) %>% 
   # left_join(ID_linkage, ., by = "mrn") %>% 
   select(#-mrn, 
-    -complete_, -moffitt_patient)
+    -c(complete_, moffitt_patient, summary_of_rx_1st_course, summary_of_rx_1st_course_at_t))
 
 clinical_cleaning <- function(data) {
   data <- data %>% 
