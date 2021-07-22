@@ -67,6 +67,7 @@ clinical <- clinical %>%
   ) %>% 
   mutate(across(where(is.character), .fns = ~ tolower(.))) %>%
   mutate(across(where(is.character), .fns = ~ capwords(.))) %>%
+  mutate(across(where(is.character), .fns = ~ str_replace(., "NANA", NA_character_))) %>%
   rename(Race = "race", Ethnicity = "ethnicity", Histology = "histology") %>%
   mutate(Race = case_when(
     Race %in% 
@@ -92,13 +93,79 @@ clinical <- clinical %>%
       c("Other", "Unknown") |
       Ethnicity == "Unknown"             ~ "Other/Unknown"
   )) %>% 
-
   
-  # mutate(across(where(is.character), .fns = ~ str_replace(., "NANA", NA_character_))) %>%
+  mutate(preDx_hypertension = case_when(
+    str_detect(hypertension, "pre|Pre|both")                      ~ "Yes",
+    TRUE                                                          ~ "No"
+  )) %>%
+  mutate(postDx_hypertension = case_when(
+    str_detect(hypertension, "post|Post|both")                    ~ "Yes",
+    TRUE                                                          ~ "No"
+  )) %>%
+  mutate(preDx_diabetes_mellitus = case_when(
+    str_detect(diabetes_mellitus, "pre|Pre|both")                 ~ "Yes",
+    TRUE                                                          ~ "No"
+  )) %>%
+  mutate(postDx_diabetes_mellitus = case_when(
+    str_detect(diabetes_mellitus, "post|Post|both")               ~ "Yes",
+    TRUE                                                          ~ "No"
+  )) %>%
+  mutate(preDx_hypercholesterolemia = case_when(
+    str_detect(hypercholesterolemia, "pre|Pre|both")              ~ "Yes",
+    TRUE                                                          ~ "No"
+  )) %>%
+  mutate(postDx_hypercholesterolemia = case_when(
+    str_detect(hypercholesterolemia, "post|Post|both")            ~ "Yes",
+    TRUE                                                          ~ "No"
+  )) %>%
+  mutate(preDx_chronic_kidney_disease = case_when(
+    str_detect(chronic_kidney_disease, "pre|Pre|both")            ~ "Yes",
+    TRUE                                                          ~ "No"
+  )) %>%
+  mutate(postDx_chronic_kidney_disease = case_when(
+    str_detect(chronic_kidney_disease, "post|Post|both")          ~ "Yes",
+    TRUE                                                          ~ "No"
+  )) %>%
+  mutate(preDx_cardiac_conditions = case_when(
+    str_detect(cardiac_conditions_including_bu, "pre|Pre|both")   ~ "Yes",
+    TRUE                                                          ~ "No"
+  )) %>%
+  mutate(postDx_cardiac_conditions = case_when(
+    str_detect(cardiac_conditions_including_bu, "post|Post|both") ~ "Yes",
+    TRUE                                                          ~ "No"
+  )) %>%
+  
+  mutate(preDx_comorbidities = case_when(
+    str_detect(hypertension, "pre|Pre") |
+      str_detect(diabetes_mellitus, "pre|Pre") |
+      str_detect(hypercholesterolemia, "pre|Pre") |
+      str_detect(chronic_kidney_disease, "pre|Pre") |
+      str_detect(cardiac_conditions_including_bu, "pre|Pre")       ~ "Comorbidities",
+    TRUE                                                           ~ "No comorbidities"
+  )) %>%
+  mutate(debulking_status =
+           str_remove(debulking_status,
+                      " \\(.*")) %>%
+  # mutate(any_germline_brca_mutation = case_when(
+  #   germline_brca1_mutation == "Yes" |
+  #     germline_brca2_mutation == "Yes"       ~ "Yes",
+  #   germline_brca1_mutation == "No"          ~ "No",
+  #   germline_brca2_mutation == "No"          ~ "No",
+  #   TRUE                                     ~ "Unknown"
+  # )) %>% 
+  # mutate(any_somatic_brca_mutation = case_when(
+  #   somatic_brca1_mutation == "Yes" |
+  #     somatic_brca2_mutation == "Yes"        ~ "Yes",
+  #   somatic_brca1_mutation == "No"           ~ "No",
+  #   somatic_brca2_mutation == "No"           ~ "No",
+  #   TRUE                                     ~ "Unknown"
+  # ))
+
   mutate(date_of_first_adjuvant_chemother = as.POSIXct(date_of_first_adjuvant_chemother, format = "%m/%d/%y")) %>% 
+  filter(grade_differentiation != "Well Differentiated" | is.na(grade_differentiation)) %>% 
   # left_join(ID_linkage, ., by = "mrn") %>% 
   select(#-mrn, 
-    -c(complete_, moffitt_patient, summary_of_rx_1st_course, summary_of_rx_1st_course_at_t))
+    -c(complete_, moffitt_patient, summary_of_rx_1st_course, summary_of_rx_1st_course_at_t, subject_number))
 
 clinical_cleaning <- function(data) {
   data <- data %>% 
@@ -167,20 +234,7 @@ clinical_cleaning <- function(data) {
       date_of_first_recurrence > date_of_first_surgery    ~ date_of_first_recurrence,
       TRUE                                                ~ NA_POSIXct_
     )) %>%
-    mutate(has_the_patient_recurred_after_surg = ifelse(!is.na(recurrence_date_after_surgery), "Recurrence", "No Recurrence")) %>%
-   
-
-    mutate(preDx_comorbidities = case_when(
-      str_detect(hypertension, "pre|Pre") |
-        str_detect(diabetes_mellitus, "pre|Pre") |
-        str_detect(hypercholesterolemia, "pre|Pre") |
-        str_detect(chronic_kidney_disease, "pre|Pre") |
-        str_detect(cardiac_conditions_including_bu, "pre|Pre")        ~ "Comorbidities",
-      TRUE                                                            ~ "No comorbidities"
-    )) %>%
-    mutate(debulking_status =
-             str_remove(debulking_status,
-                        " \\(.*"))
+    mutate(has_the_patient_recurred_after_surg = ifelse(!is.na(recurrence_date_after_surgery), "Recurrence", "No Recurrence"))
 }
 
 clinical <- clinical_cleaning(data = clinical)

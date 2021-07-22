@@ -553,6 +553,17 @@ workflow() %>%
   add_model(importance_spec) %>% 
   fit(train_data) %>% 
   pull_workflow_fit() %>% 
+  vi(method = "permute", target = , metrics = , reference = , pred_wrapper = ,
+     train = juice(prep_data), nsim = 10) %>% 
+  # mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance)) %>% 
+  # ggplot(aes(x= desc(fct_reorder(Variable, abs(Importance)))  , y = Importance, fill = Sign)) +
+  # geom_bar(stat = "identity")
+
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  pull_workflow_fit() %>% 
   vi() %>% 
   mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance))
 
