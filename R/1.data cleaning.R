@@ -59,6 +59,8 @@ summary(features)
 
 
 ################################################################################################# III ### Clinical----
+
+
 clinical <- clinical %>% 
   `colnames<-`(
     str_remove(colnames(.), "_cancer_registry") %>% 
@@ -162,6 +164,7 @@ clinical <- clinical %>%
   # ))
 
   mutate(date_of_first_adjuvant_chemother = as.POSIXct(date_of_first_adjuvant_chemother, format = "%m/%d/%y")) %>% 
+  # Remove low grade - well differentiated cases
   filter(grade_differentiation != "Well Differentiated" | is.na(grade_differentiation)) %>% 
   # left_join(ID_linkage, ., by = "mrn") %>% 
   select(#-mrn, 
