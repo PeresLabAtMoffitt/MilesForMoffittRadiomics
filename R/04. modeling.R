@@ -601,7 +601,10 @@ final_fit %>%
   conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
   autoplot()
 
-
+last_fit_rf %>%
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot(type = "heatmap")
 
 
 
@@ -623,8 +626,12 @@ final_fit %>% collect_predictions() %>%
 predict(final_fit$.workflow[[1]], test_data[15,]) 
 # Here to test on the 15th element of the test data by itself
 
-# If choose glmnet, can see estimate on the testing
 
+
+
+
+
+# If choose glmnet, can see estimate on the testing
 final_fit_sec <- final_glmnet %>% 
   last_fit(data_split)
 
@@ -710,3 +717,198 @@ final_fit_sec %>% collect_predictions() %>%
 
 
 ############################################################################################### DECISION TREE
+# xgboost_recipe <- 
+#   recipe(formula = has_the_patient_recurred ~ ., data = train_data) %>% 
+#   step_novel(all_nominal(), -all_outcomes()) %>% 
+#   step_dummy(all_nominal(), -all_outcomes(), one_hot = TRUE) %>% 
+#   step_zv(all_predictors()) 
+library(xgboost)
+xgboost_spec <- 
+  boost_tree(trees = tune(), min_n = tune(), tree_depth = tune(), learn_rate = tune(), 
+             loss_reduction = tune(), sample_size = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("xgboost") 
+
+xgboost_workflow <- 
+  workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(xgboost_spec) 
+
+set.seed(57585)
+xgboost_tune <-
+  tune_grid(xgboost_workflow, resamples = mldata_folds, grid = 10)
+
+######################################################################### Explore xgboost Tuning Results ----
+
+show_best(xgboost_tune, metric = "roc_auc")
+show_best(xgboost_tune, metric = "accuracy")
+
+# Visualize tuned parameters
+autoplot(xgboost_tune)
+# mtry is the number of predictor randomly selected -> needs to be 
+# mim_n is the minimal node size -> needs to be small
+
+xgboost_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "accuracy") %>% 
+  select(mean, trees:sample_size) %>% 
+  pivot_longer(trees:sample_size,
+               values_to = "value",
+               names_to = "param") %>% 
+  ggplot(aes(value, mean, color = param)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap( . ~ param, scales = "free_x")
+
+xgboost_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "roc_auc") %>% 
+  select(mean, trees:sample_size) %>% 
+  pivot_longer(trees:sample_size,
+               values_to = "value",
+               names_to = "param") %>% 
+  ggplot(aes(value, mean, color = param)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap( . ~ param, scales = "free_x")
+
+xgboost_tune %>% select_best("roc_auc")
+
+final_xgboost <- xgboost_workflow %>% 
+  finalize_workflow(select_best(xgboost_tune, "roc_auc"))
+final_xgboost
+
+
+# Calculate Performance Metrics again with our last tuned model
+#Plot the ROC curve
+xgboost_results <- final_xgboost %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
+  )
+
+
+
+# OR SIMPLE DECISION TREE
+
+tree_spec <- decision_tree(
+  cost_complexity = tune(),
+  tree_depth = tune(),
+  min_n = tune()) %>% 
+  set_engine("rpart") %>% 
+  set_mode("classification")
+
+tree_workflow <- 
+  workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(tree_spec) 
+
+tree_grid <- grid_regular(cost_complexity(),
+                          tree_depth(),
+                          min_n(), levels = 4)
+
+tree_tune <- tree_workflow %>% 
+  tune_grid(
+  resamples = mldata_folds,
+  grid = tree_grid,
+  metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)
+)
+
+# Explore
+head(tree_tune %>% 
+  collect_metrics())
+
+autoplot(tree_tune) + theme_light()
+
+tree_tune %>% select_best("roc_auc")
+
+final_tree <- tree_workflow %>% 
+  finalize_workflow(select_best(tree_tune, "roc_auc"))
+final_tree
+
+tree_results <- final_tree %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
+  )
+
+############################################################################################### EVALUATE MODELS ----
+# Explore Performance Metrics
+collect_metrics(rf_results)
+collect_metrics(glmnet_results)
+collect_metrics(xgboost_results)
+collect_metrics(tree_results)
+
+# Accuracy is llow
+# Sensitivity has 50% chance finding the minority class pop
+
+rf_results %>% 
+  conf_mat_resampled()
+glmnet_results %>% 
+  conf_mat_resampled()
+xgboost_results %>% 
+  conf_mat_resampled()
+tree_results %>% 
+  conf_mat_resampled()
+
+############################################################################################### DRAW TREE
+
+# plot the first tree
+xgb.plot.tree(model = xgboost_results, trees = 1)
+
+xgb.plot.multi.trees(
+  xgboost_workflow,
+  feature_names = NULL,
+  features_keep = 5,
+  plot_width = NULL,
+  plot_height = NULL,
+  render = TRUE
+)
+
+
+final_fit$
+
+# Fitting
+final_fit <- last_fit(final_xgboost, data_split)
+
+write_rds(final_fit)
+
+library(vip)
+
+final_fit %>% 
+  vip(geom = "col", aesthetics = list(fill = , alpha = ))
+
+library(parttree)
+
+ex_fit <- fit(final_tree, formula but with only 2 predictor, train_data)
+train_data %>% 
+  ggplot(aes(x= , y = )) +
+  geom_partree(data = ex_fit, aes(fill(outcome), alpha = 0.3)) +
+  geom_point(alpha = 0.7, aes(color = outcome)) +
+  scale_color_viridis_c(aesthetics = c("color", "fill"))
+
+# testing data
+collect_metrics(final_rs)
+collect_predictions(final_rs) %>% 
+  ggplot(aes(outcome, .pred)) +
+  geom_abline(slope = 1) +
+  geom_point()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
