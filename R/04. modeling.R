@@ -268,26 +268,18 @@ ranger_tune %>% select_best("accuracy")
 #   geom_point()
 
 # Step Finalize the model with our tuned parameters
-best_auc <- select_best(ranger_tune, # or sec_tune_results if tuned more,
-                        "roc_auc")
-
-final_rf <- finalize_model(ranger_spec,
-                           best_auc)
-# Aka same
-final_rf <- ranger_spec %>% 
-  finalize_model(select_best(ranger_tune, "roc_auc"))
-final_rf
+# best_auc <- select_best(ranger_tune, # or sec_tune_results if tuned more,
+#                         "roc_auc")
+# 
+# final_rf <- finalize_model(ranger_spec,
+#                            best_auc)
+# # Aka same
+# final_rf <- ranger_spec %>% 
+#   finalize_model(select_best(ranger_tune, "accuracy"))
 
 final_rf <- ranger_workflow %>% 
-  finalize_workflow(select_best(ranger_tune, "roc_auc"))
-
-
-
-
-
-
-
-
+  finalize_workflow(select_best(ranger_tune, "accuracy"))
+final_rf
 
 
 ############################################################################################### LOGISTIC REGRESSION ----
@@ -300,7 +292,7 @@ final_rf <- ranger_workflow %>%
 # Find the optimal value of lambda that minimizes the cross-validation error
 # Need to prep data differently
 train_data_lambda <- training(data_split) %>% 
-  drop_na()
+  drop_na() %>% select(-mrn)
 
 # Dummy code categorical predictor variables
 x <- model.matrix(has_the_patient_recurred ~ ., data = train_data_lambda)[,-1]
@@ -321,15 +313,15 @@ model <- glmnet(x, y, alpha = 1, family = "binomial",
 # Display regression coefficients
 coef(model)
 
-library(usemodels) # Gives a scaffolding of the modeling code
-use_glmnet(has_the_patient_recurred ~ ., data = train_data)
+# library(usemodels) # Gives a scaffolding of the modeling code
+# use_glmnet(has_the_patient_recurred ~ ., data = train_data)
 
-glmnet_recipe <- 
-  recipe(formula = has_the_patient_recurred ~ ., data = train_data) %>% 
-  step_novel(all_nominal(), -all_outcomes()) %>% 
-  step_dummy(all_nominal(), -all_outcomes()) %>% 
-  step_zv(all_predictors()) %>% 
-  step_normalize(all_predictors(), -all_nominal()) 
+# glmnet_recipe <- 
+#   recipe(formula = has_the_patient_recurred ~ ., data = train_data) %>% 
+#   step_novel(all_nominal(), -all_outcomes()) %>% 
+#   step_dummy(all_nominal(), -all_outcomes()) %>% 
+#   step_zv(all_predictors()) %>% 
+#   step_normalize(all_predictors(), -all_nominal()) 
 
 glmnet_spec <- 
   logistic_reg(penalty = tune(), mixture = tune()) %>% 
@@ -368,21 +360,32 @@ glmnet_tune %>%
   geom_point(show.legend = FALSE) +
   facet_wrap( . ~ param, scales = "free_x")
 
-glmnet_tune %>% select_best("accuracy")
+glmnet_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "roc_auc") %>% 
+  select(mean, penalty, mixture) %>% 
+  pivot_longer(penalty:mixture,
+               values_to = "value",
+               names_to = "param") %>% 
+  ggplot(aes(value, mean, color = param)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap( . ~ param, scales = "free_x")
+
+glmnet_tune %>% select_best("roc_auc")
 
 # Step Finalize the model with our tuned parameters
-best_acc <- select_best(glmnet_tune, # or sec_tune_results if tuned more,
-                        "accuracy")
-
-final_glmnet <- finalize_model(glmnet_spec,
-                               best_acc)
-# Aka same
-final_glmnet <- glmnet_spec %>% 
-  finalize_model(select_best(glmnet_tune, "accuracy"))
-final_glmnet
+# best_acc <- select_best(glmnet_tune, # or sec_tune_results if tuned more,
+#                         "accuracy")
+# 
+# final_glmnet <- finalize_model(glmnet_spec,
+#                                best_acc)
+# # Aka same
+# final_glmnet <- glmnet_spec %>% 
+#   finalize_model(select_best(glmnet_tune, "roc_auc"))
 
 final_glmnet <- glmnet_workflow %>% 
-  finalize_workflow(select_best(glmnet_tune, "accuracy"))
+  finalize_workflow(select_best(glmnet_tune, "roc_auc"))
+final_glmnet
 
 
 # Calculate Performance Metrics again with our last tuned model
@@ -405,36 +408,55 @@ rf_results <- final_rf %>%
 ###############################################################################  neural network
 
 ############################################################################################### EVALUATE MODELS ----
-
+# Explore Performance Metrics
+collect_metrics(rf_results)
 collect_metrics(glmnet_results)
 # Accuracy is llow
 # Sensitivity has 50% chance finding the minority class pop
+
+rf_results %>% 
+  conf_mat_resampled()
 glmnet_results %>% 
   conf_mat_resampled()
 
+# Visualization
+rf_results %>% # is the saved predictions
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()
 glmnet_results %>% 
   collect_predictions() %>% 
-  group_by(id) %>% 
-  roc_curve(has_the_patient_recurred, `.pred_No Recurrence`) %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
   autoplot()
 
+rf_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+  autoplot()
 glmnet_results %>% 
   collect_predictions() %>% 
   group_by(id) %>% 
   roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
   autoplot()
 
-
+rf_results %>% # Compare both models
+  collect_predictions() %>% 
+  mutate(model = "rf") %>% 
+  bind_rows(glmnet_results %>% 
+              collect_predictions() %>% 
+              mutate(model = "glmet")) %>% 
+  group_by(model) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+  autoplot()
 
 
 
 # Calculate prediction after the fact
-rf_results %>% collect_predictions() %>% 
-  ppv(has_the_patient_recurred, .pred_Recurrence)
-
 rf_results %>% collect_predictions() %>% group_by(id) %>% 
-  ppv(has_the_patient_recurred, .pred_Recurrence) # do histog
-
+  ppv(truth = has_the_patient_recurred, estimate = .pred_class) # do histog
+glmnet_results %>% collect_predictions() %>% group_by(id) %>% 
+  ppv(truth = has_the_patient_recurred, estimate = .pred_class)
 
 
 
@@ -451,7 +473,7 @@ workflow() %>%
   add_recipe(mldata_recipe) %>% 
   add_model(importance_spec) %>% 
   fit(train_data) %>% 
-  pull_workflow_fit() %>% 
+  extract_fit_parsnip() %>% 
   vip(aesthetics = list(alpha = 0.5, fill = "midnightblue"),
       # geom = "point",
       num_features = 20
@@ -461,7 +483,7 @@ workflow() %>%
   add_recipe(mldata_recipe) %>% 
   add_model(importance_spec) %>% 
   fit(train_data) %>% 
-  pull_workflow_fit() %>% 
+  extract_fit_parsnip() %>% 
   vi() %>% 
   mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance)) %>% 
   ggplot(aes(x= desc(fct_reorder(Variable, abs(Importance)))  , y = Importance, fill = Sign)) +
@@ -471,9 +493,9 @@ workflow() %>%
   add_recipe(mldata_recipe) %>% 
   add_model(importance_spec) %>% 
   fit(train_data) %>% 
-  pull_workflow_fit() %>% 
+  extract_fit_parsnip() %>% 
   vi(method = "permute", target = , metrics = , reference = , pred_wrapper = ,
-     train = juice(prep_data), nsim = 10) %>% 
+     train = juice(prep_data), nsim = 10) #%>% 
   # mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance)) %>% 
   # ggplot(aes(x= desc(fct_reorder(Variable, abs(Importance)))  , y = Importance, fill = Sign)) +
   # geom_bar(stat = "identity")
@@ -482,90 +504,12 @@ workflow() %>%
   add_recipe(mldata_recipe) %>% 
   add_model(importance_spec) %>% 
   fit(train_data) %>% 
-  pull_workflow_fit() %>% 
+  extract_fit_parsnip() %>% 
   vi() %>% 
   mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance))
 
-# Get and saved predictions to evaluate models
-# Still on training
-rf_results <- final_rf %>% 
-  fit_resamples( # is not doing any tuning, measuring performance on cross validation data
-    resamples = mldata_folds,
-    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
-    control = control_resamples(save_pred = TRUE)
-  )
 
-
-
-
-
-mod <-
-  logistic_reg(penalty = 0.01, mixture = 1/3) %>%
-  # now say how you want to fit the model and another other options
-  set_engine("glmnet", nlambda = 10)
-translate(mod, engine = "glmnet")
-
-
-
-
-
-
-############################################################################### II ### Model Evaluation 
-############################################################################################### EVALUATE MODELS
-
-
-# Calculate Performance Metrics
-
-
-collect_metrics(rf_results)
-collect_metrics(glmnet_results)
-
-# Accuracy is llow
-# Sensitivity has 50% chance finding the minority class pop
-
-
-# Visualization
-rf_results %>% # is the saved predictions
-  conf_mat_resampled()
-glmnet_results %>% 
-  conf_mat_resampled()
-# 
-
-# Plot the ROC curve
-rf_results %>% 
-  collect_predictions() %>% 
-  group_by(id) %>% 
-  roc_curve(has_the_patient_recurred, `.pred_No Recurrence`) %>% 
-  autoplot()
-
-rf_results %>% 
-  collect_predictions() %>% 
-  group_by(id) %>% 
-  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
-  autoplot()
-
-rf_results %>% # Compare both models
-  collect_predictions() %>% 
-  mutate(model = "rf") %>% 
-  bind_rows(glmnet_results %>% 
-              collect_predictions() %>% 
-              mutate(model = "glmet")) %>% 
-  group_by(model) %>% 
-  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
-  autoplot()
-
-rf_results %>% 
-  collect_predictions() %>% 
-  conf_mat(has_the_patient_recurred, .pred_Recurrence) %>% 
-  autoplot()
-
-
-
-
-
-
-# Step Explore of features importance
-library(vip) 
+###################################### Ranger
 
 # Need to train the model one more time but without tuning to go faster
 importance_spec <- ranger_spec %>% 
@@ -577,11 +521,34 @@ workflow() %>%
   add_recipe(mldata_recipe) %>% 
   add_model(importance_spec) %>% 
   fit(train_data) %>% 
-  pull_workflow_fit() %>% 
+  extract_fit_parsnip() %>% 
   vip(aesthetics = list(alpha = 0.5, fill = "midnightblue"),
       # geom = "point",
       num_features = 20
   )
+
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  extract_fit_parsnip() %>% 
+  vi() %>% 
+  mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance)) %>% 
+  ggplot(aes(x= desc(fct_reorder(Variable, abs(Importance)))  , y = Importance, fill = Sign)) +
+  geom_bar(stat = "identity")
+
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  extract_fit_parsnip() %>% 
+  vi(method = "permute", target = has_the_patient_recurred, metrics = , reference = , pred_wrapper = ,
+     train = juice(mldata_prep), nsim = 10) #%>% 
+# mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance)) %>% 
+# ggplot(aes(x= desc(fct_reorder(Variable, abs(Importance)))  , y = Importance, fill = Sign)) +
+# geom_bar(stat = "identity")
+
+
 
 
 
@@ -592,20 +559,49 @@ workflow() %>%
 final_fit <- final_rf %>% 
   last_fit(data_split)
 
-# Step Explore the model
+
+# Step Explore the modelon testing set
 # Collect metrics and compare number with the metrics from the training
 # Can see if lower or higher...overfit our data, etc
-final_fit %>% 
-  collect_metrics()
+collect_metrics(final_fit)
+# Compare to the training previous number
+collect_metrics(rf_results) # as a meminder of previous results
+# Test data is a littke lower with samll SD
+
+collect_metrics(final_fit) %>% 
+  mutate(set = "testing") %>% 
+  rename(mean = .estimate) %>% 
+  bind_rows(collect_metrics(rf_results) %>% 
+              mutate(set = "training")) %>% 
+  filter(str_detect(.metric, "accuracy|roc_auc")) %>% 
+  ggplot(aes(x= .metric, y=mean, fill = set))+
+  geom_bar(stat = "identity",
+           position = position_dodge()) + 
+  geom_errorbar(aes(xmin = mean - std_err,
+                    xmax = mean + std_err),
+                width = 0.2, alpha = 0.5)
+collect_metrics(final_fit) %>% 
+  mutate(set = "testing") %>% 
+  rename(mean = .estimate) %>% 
+  bind_rows(collect_metrics(rf_results) %>% 
+              mutate(set = "training")) %>% 
+  filter(str_detect(.metric, "accuracy|roc_auc")) %>% 
+  ggplot(aes(x= .metric, y=mean, color = set))+
+  geom_point() + 
+  geom_errorbar(aes(xmin = mean - std_err,
+                    xmax = mean + std_err),
+                width = 0.2, alpha = 0.5)
+
 
 final_fit %>% 
   collect_predictions() %>% 
-  conf_mat(has_the_patient_recurred, .pred_Recurrence)
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class)
+final_fit %>% 
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()
 
 
-# Compare to the training prvious number
-show_best(ranger_tune, metric = "roc_auc") # as a meminder of previous results
-# Test data is a littke lower with samll SD
 
 
 
@@ -616,7 +612,7 @@ final_fit %>% collect_predictions() %>%
     TRUE                                        ~ ":("
   )) %>% 
   ggplot(aes(is_predicton_correct))+
-  geom_bar()
+  geom_bar() #### scale percent
 
 final_fit %>% collect_predictions() %>% 
   ggplot(aes(has_the_patient_recurred, .pred_class))+
@@ -628,41 +624,39 @@ predict(final_fit$.workflow[[1]], test_data[15,])
 # Here to test on the 15th element of the test data by itself
 
 # If choose glmnet, can see estimate on the testing
-final_fit %>%
+
+final_fit_sec <- final_glmnet %>% 
+  last_fit(data_split)
+
+final_fit_sec %>%
   pull(.workflow) %>% 
   pluck(1) %>% 
   tidy(exponentiate = TRUE) %>% 
-  # arrange(estimate) %>% 
-  kable(digits = 3)
+  arrange(desc(abs(estimate))) # %>%
+  # kableExtra::kable(digits = 3)
 
-final_fit %>% # WARNING it uses the scaled data
+final_fit_sec %>% # WARNING it uses the scaled data
   pull(.workflow) %>% 
   pluck(1) %>% 
   tidy() %>% 
-  filter(term != "(Intercept") %>% 
-  ggplot(aes(estimate, fct_reorder(term, estinate)))+
+  filter(term != "(Intercept)") %>% 
+  arrange(desc(abs(estimate))) %>% 
+  filter(abs(estimate) >0) %>% 
+  ggplot(aes(estimate, fct_reorder(term, desc(estimate))))+
   geom_vline(xintercept = 0, color = "lightgrey", lty = 2, size = 1.2) +
-  geom_errorbar(aes(xmin = estimate - std.error,
-                    xmax = estimate + std.error),
-                width = 0.2, alpha = 0.5)+
-  geom_point()
+  # geom_errorbar(aes(xmin = estimate - std.error,
+  #                   xmax = estimate + std.error),
+  #               width = 0.2, alpha = 0.5)+
+  geom_point() + 
+  theme_classic2()
 
 
-# Step finalize Fit : fitting to the whole training and evaluating on the testing data
-final_glmnet_fit <- final_glmnet %>% 
-  last_fit(data_split)
-
-# Step Explore the model
-# Collect metrics and compare number with the metrics from the training
-# Can see if lower or higher...overfit our data, etc
-final_glmnet_fit %>% 
-  collect_metrics()
-# Compare to the training prvious number
-show_best(glmnet_tune, metric = "roc_auc")
-# Test data is a littke lower with samll SD
+collect_metrics(final_fit)
+# Compare to the training previous number
+collect_metrics(glmnet_results)
 
 # Step Explore the prediction
-final_glmnet_fit %>% collect_predictions() %>% 
+final_fit_sec %>% collect_predictions() %>% 
   mutate(is_predicton_correct = case_when(
     has_the_patient_recurred == .pred_class     ~ "Cool!",
     TRUE                                        ~ ":("
@@ -670,77 +664,49 @@ final_glmnet_fit %>% collect_predictions() %>%
   ggplot(aes(is_predicton_correct))+
   geom_bar()
 
-final_glmnet_fit %>% collect_predictions() %>% 
-  ggplot(aes(has_the_patient_recurred, .pred_class))+
-  geom_point() +
-  geom_abline()
 
-# Predict on 1 element or new data
-predict(final_glmnet_fit$.workflow[[1]], test_data[15,]) 
-# Here to test on the 15th element of the test data by itself
-
-
-
-# Measure how they performed
-
-results_train %>% 
-  group_by(model) %>% 
-  rmse(truth = truth, estimate = .prod) # .estimate = rootmean square error is lower so do better
-
-results_test %>% 
-  group_by(model) %>% 
-  rmse(truth = truth, estimate = .prod) # .est same as train so didn't overfit
-# if rf becore bigger than the one for training
+# # Measure how they performed
+# 
+# results_train %>% 
+#   group_by(model) %>% 
+#   rmse(truth = truth, estimate = .prod) # .estimate = rootmean square error is lower so do better
+# 
+# results_test %>% 
+#   group_by(model) %>% 
+#   rmse(truth = truth, estimate = .prod) # .est same as train so didn't overfit
+# # if rf becore bigger than the one for training
 
 
-results_test %>% 
-  mutate(train = "testing") %>% 
-  bind_rows(results_train %>% mutate(train = "training")) %>% 
-  ggplot(aes(truth, .prod, color = model)) +
-  geom_abline(lty = 2, color = "grey80", size = 1.5)+
-  geom_point(alpha = 0.5)+
-  facet_wrap( ~ train)
+final_fit_sec %>% collect_predictions() %>% 
+  mutate(set = "glmnet") %>% 
+  bind_rows(final_fit %>% collect_predictions() %>% 
+              mutate(set = "rf")) %>% 
+  group_by(set) %>% 
+  summarize(recurrence = mean(.pred_Recurrence),
+            no_recurrence = mean(`.pred_No Recurrence`)) %>% 
+  ungroup() %>% 
+  pivot_longer(cols = -set, names_to = "status", values_to = "probability") %>% 
+  ggplot(aes(x= set, y=probability, fill = status))+
+  geom_bar(stat = "identity",
+           position = position_dodge())
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+final_fit_sec %>% collect_predictions() %>% 
+  mutate(set = "glmnet") %>% 
+  bind_rows(final_fit %>% collect_predictions() %>% 
+              mutate(set = "rf")) %>% 
+  mutate(is_predicton_correct = case_when(
+    has_the_patient_recurred == .pred_class     ~ "Cool!",
+    TRUE                                        ~ ":("
+  )) %>% 
+  group_by(set, is_predicton_correct) %>% 
+  summarize(recurrence = mean(.pred_Recurrence),
+            no_recurrence = mean(`.pred_No Recurrence`)) %>% 
+  ungroup() %>% 
+  pivot_longer(cols = -c(set, is_predicton_correct), names_to = "status", values_to = "probability") %>% 
+  ggplot(aes(x= is_predicton_correct, y=probability, fill = status))+
+  geom_bar(stat = "identity",
+           position = position_dodge()) + 
+  facet_wrap(. ~ set)
 
 
 ############################################################################################### DECISION TREE
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
