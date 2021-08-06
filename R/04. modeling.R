@@ -18,17 +18,17 @@ clinical <- read_rds("clinical.rds")
 library(GGally)
 
 clinical %>% 
-  select(has_the_patient_recurred_, year_of_diagnosis, treatment_type, debulking_status,
+  select(has_the_patient_recurred, year_of_diagnosis, treatment_type, debulking_status,
          age_at_diagnosis, primary_site) %>% 
-  ggpairs(columns = 2:ncol(.), aes(color = has_the_patient_recurred_, alpha = 0.5))
+  ggpairs(columns = 2:ncol(.), aes(color = has_the_patient_recurred, alpha = 0.5))
 
 clinical %>% 
-  select(has_the_patient_recurred_, treatment_type, debulking_status,
+  select(has_the_patient_recurred, treatment_type, debulking_status,
          primary_site, year_of_diagnosis, age_at_diagnosis) %>% 
   mutate(year_of_diagnosis = as.character(year_of_diagnosis)) %>%
   mutate(age_at_diagnosis = as.character(age_at_diagnosis)) %>%
   pivot_longer(2:ncol(.)) %>% 
-  ggplot(aes(y = value, fill = has_the_patient_recurred_)) +
+  ggplot(aes(y = value, fill = has_the_patient_recurred)) +
   geom_bar(position = "fill")+
   facet_wrap(vars(name), scales = "free")+
   labs(x= NULL, y = NULL)
@@ -39,16 +39,16 @@ clinical %>%
   ggplot(aes(year_of_diagnosis, recurred))+
   geom_line()
 
-library(naniar)
+library(naniar) # upsetplot
 
 clinical %>% 
-  select(has_the_patient_recurred_, ecog_pretrt, ecog_posttrt, ecog_recurr, 
+  select(has_the_patient_recurred, ecog_pretrt, ecog_posttrt, ecog_recurr, 
          Ethnicity, grade_differentiation) %>%
   gg_miss_upset()
 # Will do unknown, remove ecog
 
 clinical %>% 
-  select(has_the_patient_recurred_, germline_brca1_mutation, germline_brca2_mutation, somatic_brca1_mutation,
+  select(has_the_patient_recurred, germline_brca1_mutation, germline_brca2_mutation, somatic_brca1_mutation,
          somatic_brca2_mutation, any_unclassified_brca_mutation) %>%
   gg_miss_upset()
 # Will do unknown, remove any_unclassified_brca_mutation
@@ -61,29 +61,39 @@ clinical %>%
 ############################################################################### II ### Data prepping ----
 # remove variables non meaningful or redundant to recurrence
 clinical_ml <- read_rds("clinical.rds") %>% 
-  select(-c(Gender, subject_number, '_tnm_edition_number_must_use_', baseline_ctscan_outside_moffitt, 
+  select(-c(vital_new, 
+            gender, race, ethnicity, 
+            baseline_ctscan_outside_moffitt, tumor_sequence_number, 
+            "histology", tnm_edition_number_must_use, grade_differentiation,
          date_of_birth, any_unclassified_brca_mutation,
          comment_for_cardiac_comorbidity,
-         vital_new#,
-         # months_at_first_neoadjuvant_chem, months_at_first_adjuvant_chem, months_at_first_chemo, 
-         # months_at_first_surgery, age_at_surgery, age_at_first_recurrence, month_at_first_recurrence_Dx, 
-         # months_at_surg_followup, months_at_neo_followup, months_at_chem_followup, months_of_surg_rec_free, 
-         # months_of_neo_rec_free, months_of_chem_rec_free,
-         # months_of_dx_rec_free, recurrence_time, months_of_treat_rec_free, 
-         # os_time, rec_event, os_event#, 
-         # has_the_patient_recurred_after_surg
+         vital_date_new, date_of_last_followup, fwdate_most_recent,
+         germline_brca1_mutation, germline_brca2_mutation, somatic_brca1_mutation, ##### To add
+         somatic_brca2_mutation, any_unclassified_brca_mutation,
+         "hypertension", "diabetes_mellitus", "hypercholesterolemia",
+         "chronic_kidney_disease", "cardiac_conditions_including_bu",
+         comment_for_cardiac_comorbidity,
+         "complete",
+         ecog_posttrt, ecog_recurr, "ecog_pretrt_date", "ecog_posttrt_date", "ecog_recurr_date",
+         contrast_enhancement, # What is the difference with w_w...
+         age_at_Dx,
+         
+         months_at_first_neoadjuvant_chem, months_at_first_adjuvant_chem, months_at_first_chemo,
+         months_at_first_surgery, age_at_surgery, age_at_first_recurrence, month_at_first_recurrence_Dx,
+         months_at_surg_followup, months_at_neo_followup, months_at_chem_followup, months_of_surg_rec_free,
+         months_of_neo_rec_free, months_of_chem_rec_free,
+         months_of_dx_rec_free, recurrence_time, months_of_treat_rec_free,
+         os_time, rec_event, os_event,
+         has_the_patient_recurredafter_surg
   )) %>% 
   
-  select(-c(ecog_pretrt, ecog_posttrt, ecog_recurr, 
-            
-            germline_brca1_mutation, germline_brca2_mutation, somatic_brca1_mutation,
-            somatic_brca2_mutation,
-
-            contrast_enhancement, # What is the difference with w_w...
-            tumor_sequence_number, 
-            # Include as year, month?
+  select(-c( # Include as year, month?
+    date_of_diagnosis, baseline_ct_scan_date,
             date_of_first_neoadjuvant_chemot,
             date_of_first_surgery, date_of_first_adjuvant_chemother,
+            "date_of_first_recurrence", "date_of_surgery_abstracted",
+    first_treatment_date, first_chemo_date, "months_at_first_treatment", "rec_event_date",
+    "months_at_treat_followup", "recurrence_date_after_surgery"
             ))
 
 # Select column name of stable features from the radiomics data
@@ -100,7 +110,7 @@ stable_features <- paste0(paste("nor_", concordance$stable_features, "[a-z]", se
 
 mldata <- read_rds("radiomics.rds") %>% 
   select(mrn, matches(stable_features)) %>% 
-  left_join(., clinical_ml, by = "mrn")
+  right_join(., clinical_ml, by = "mrn")
 
 # Explore what will need to be changed
 skimr::skim(mldata)
@@ -140,19 +150,20 @@ test_data  <- testing(data_split)
 # Recipe
 mldata_recipe <-
   # 1.model formula
-  recipe(has_the_patient_recurred_ ~ ., data = train_data)  %>% 
+  recipe(has_the_patient_recurred ~ ., data = train_data)  %>% 
   # 2.keep these variables but not use them as either outcomes or predictors
   # Keep id but not include in the model as predictor
-  update_role(mrn, new_role = "ID") %>% 
+  update_role(mrn, new_role = "ID") %>%
+  # update_role(w_wo_contrast, new_role = "Other") %>% 
   # remove variables that contain only a single value.
   step_zv(all_predictors()) %>% # or step_nzv
   # 3.If factor with too much levels, collapse lower levels
-  step_other(Histology, threshold = 0.05) %>% 
+  # step_other(Histology, threshold = 0.05) %>% 
   # data_recipe %>% prep() %>% juice() %>% count(Histology)
   
   # 4.Imputation
   step_unknown(all_nominal_predictors()) %>% 
-  # data_recipe %>% prep() %>% juice() %>% count(grade_differentiation)
+  step_impute_median(all_numeric_predictors()) %>%
   # 5.change all factor to indicator/dummy variables for model that cannot handle factor variables
   step_dummy(all_nominal(), -all_outcomes()) #%>%
   
@@ -161,9 +172,9 @@ mldata_recipe <-
   # step_rm(meaningful_dates)
   
   # LAST.For imbalance, model memorize the few example and
-  step_smote(has_the_patient_recurred_) # Use nearest neighbor to create new synthetic observation almost similar
+  # step_smote(has_the_patient_recurred) # Use nearest neighbor to create new synthetic observation almost similar
 
-summary(mldata_recipe)
+mldata_recipe
 
 # estimate the required parameters from a training set that can be later applied to other data sets.
 # learn what the model should be with the training data
@@ -178,8 +189,7 @@ set.seed(123)
 mldata_folds <- vfold_cv(train_data, strata = w_wo_contrast)
 
 ############################################################################################### RAMDOM FOREST ----
-
-# Build model specification
+# Model specification
 ranger_spec <- rand_forest(
   # tune right value for the number of predictors that will be randomly sampled at each split when creating the tree models
   mtry = tune(), 
@@ -198,7 +208,7 @@ ranger_workflow <-
 
 # Tuning
 set.seed(54691)
-doParallel::registerDoParallel() # Because not patient, parallel processing
+doParallel::registerDoParallel()
 # will tune mtry and min_m on a grid
 ranger_tune <-
   tune_grid(ranger_workflow, # Will take our workflow and apply it on
@@ -293,9 +303,9 @@ train_data_lambda <- training(data_split) %>%
   drop_na()
 
 # Dummy code categorical predictor variables
-x <- model.matrix(has_the_patient_recurred_ ~ ., data = train_data_lambda)[,-1]
+x <- model.matrix(has_the_patient_recurred ~ ., data = train_data_lambda)[,-1]
 # Convert the outcome (class) to a numerical variable
-y <- ifelse(train_data_lambda$has_the_patient_recurred_ == "Recurrence", 1, 0)
+y <- ifelse(train_data_lambda$has_the_patient_recurred == "Recurrence", 1, 0)
 
 library(glmnet)
 set.seed(123)
@@ -312,10 +322,10 @@ model <- glmnet(x, y, alpha = 1, family = "binomial",
 coef(model)
 
 library(usemodels) # Gives a scaffolding of the modeling code
-use_glmnet(has_the_patient_recurred_ ~ ., data = train_data)
+use_glmnet(has_the_patient_recurred ~ ., data = train_data)
 
 glmnet_recipe <- 
-  recipe(formula = has_the_patient_recurred_ ~ ., data = train_data) %>% 
+  recipe(formula = has_the_patient_recurred ~ ., data = train_data) %>% 
   step_novel(all_nominal(), -all_outcomes()) %>% 
   step_dummy(all_nominal(), -all_outcomes()) %>% 
   step_zv(all_predictors()) %>% 
@@ -405,13 +415,13 @@ glmnet_results %>%
 glmnet_results %>% 
   collect_predictions() %>% 
   group_by(id) %>% 
-  roc_curve(has_the_patient_recurred_, `.pred_No Recurrence`) %>% 
+  roc_curve(has_the_patient_recurred, `.pred_No Recurrence`) %>% 
   autoplot()
 
 glmnet_results %>% 
   collect_predictions() %>% 
   group_by(id) %>% 
-  roc_curve(has_the_patient_recurred_, .pred_Recurrence) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
   autoplot()
 
 
@@ -420,10 +430,10 @@ glmnet_results %>%
 
 # Calculate prediction after the fact
 rf_results %>% collect_predictions() %>% 
-  ppv(has_the_patient_recurred_, .pred_Recurrence)
+  ppv(has_the_patient_recurred, .pred_Recurrence)
 
 rf_results %>% collect_predictions() %>% group_by(id) %>% 
-  ppv(has_the_patient_recurred_, .pred_Recurrence) # do histog
+  ppv(has_the_patient_recurred, .pred_Recurrence) # do histog
 
 
 
@@ -525,13 +535,13 @@ glmnet_results %>%
 rf_results %>% 
   collect_predictions() %>% 
   group_by(id) %>% 
-  roc_curve(has_the_patient_recurred_, `.pred_No Recurrence`) %>% 
+  roc_curve(has_the_patient_recurred, `.pred_No Recurrence`) %>% 
   autoplot()
 
 rf_results %>% 
   collect_predictions() %>% 
   group_by(id) %>% 
-  roc_curve(has_the_patient_recurred_, .pred_Recurrence) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
   autoplot()
 
 rf_results %>% # Compare both models
@@ -541,12 +551,12 @@ rf_results %>% # Compare both models
               collect_predictions() %>% 
               mutate(model = "glmet")) %>% 
   group_by(model) %>% 
-  roc_curve(has_the_patient_recurred_, .pred_Recurrence) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
   autoplot()
 
 rf_results %>% 
   collect_predictions() %>% 
-  conf_mat(has_the_patient_recurred_, .pred_Recurrence) %>% 
+  conf_mat(has_the_patient_recurred, .pred_Recurrence) %>% 
   autoplot()
 
 
@@ -590,7 +600,7 @@ final_fit %>%
 
 final_fit %>% 
   collect_predictions() %>% 
-  conf_mat(has_the_patient_recurred_, .pred_Recurrence)
+  conf_mat(has_the_patient_recurred, .pred_Recurrence)
 
 
 # Compare to the training prvious number
@@ -602,14 +612,14 @@ show_best(ranger_tune, metric = "roc_auc") # as a meminder of previous results
 # Step Explore the prediction
 final_fit %>% collect_predictions() %>% 
   mutate(is_predicton_correct = case_when(
-    has_the_patient_recurred_ == .pred_class     ~ "Cool!",
+    has_the_patient_recurred == .pred_class     ~ "Cool!",
     TRUE                                        ~ ":("
   )) %>% 
   ggplot(aes(is_predicton_correct))+
   geom_bar()
 
 final_fit %>% collect_predictions() %>% 
-  ggplot(aes(has_the_patient_recurred_, .pred_class))+
+  ggplot(aes(has_the_patient_recurred, .pred_class))+
   geom_point() +
   geom_abline()
 
@@ -654,14 +664,14 @@ show_best(glmnet_tune, metric = "roc_auc")
 # Step Explore the prediction
 final_glmnet_fit %>% collect_predictions() %>% 
   mutate(is_predicton_correct = case_when(
-    has_the_patient_recurred_ == .pred_class     ~ "Cool!",
+    has_the_patient_recurred == .pred_class     ~ "Cool!",
     TRUE                                        ~ ":("
   )) %>% 
   ggplot(aes(is_predicton_correct))+
   geom_bar()
 
 final_glmnet_fit %>% collect_predictions() %>% 
-  ggplot(aes(has_the_patient_recurred_, .pred_class))+
+  ggplot(aes(has_the_patient_recurred, .pred_class))+
   geom_point() +
   geom_abline()
 
@@ -695,6 +705,26 @@ results_test %>%
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+############################################################################################### DECISION TREE
 
 
 

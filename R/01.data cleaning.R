@@ -44,7 +44,7 @@ path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
 
 clinical <- readxl::read_xlsx(
   paste0(path,
-         "/data/radiomic_CT_final_v3.xlsx"))
+         "/data/anlysis dataset/radiomic_CT_final_v3.xlsx"))
 
 
 ################################################################################################# II ### Features----
@@ -59,9 +59,8 @@ summary(features)
 
 
 ################################################################################################# III ### Clinical----
-
-
 clinical <- clinical %>% 
+  janitor::clean_names() %>% 
   `colnames<-`(
     str_remove(colnames(.), "_cancer_registry") %>% 
       tolower() %>% 
@@ -70,30 +69,30 @@ clinical <- clinical %>%
   mutate(across(where(is.character), .fns = ~ tolower(.))) %>%
   mutate(across(where(is.character), .fns = ~ capwords(.))) %>%
   mutate(across(where(is.character), .fns = ~ str_replace(., "NANA", NA_character_))) %>%
-  rename(Race = "race", Ethnicity = "ethnicity", Histology = "histology") %>%
-  mutate(Race = case_when(
-    Race %in% 
+  # rename(race = "race", ethnicity = "ethnicity") %>%
+  mutate(race = case_when(
+    race %in% 
       c("Other", "Asian", "Pacif", "Unko", 
         "Filip", "Pakis")                                ~ "Other",
-    Race == "Unkno"                                      ~ "Unknown",
-    TRUE                                                 ~ Race
+    race == "Unkno"                                      ~ "Unknown",
+    TRUE                                                 ~ race
   )) %>% 
-  mutate(Ethnicity = case_when(
-    Ethnicity == "Non-spanish"                           ~ "Non-Hispanic",
-    Ethnicity %in% 
+  mutate(ethnicity = case_when(
+    ethnicity == "Non-spanish"                           ~ "Non-Hispanic",
+    ethnicity %in% 
       c("Spanish Nos", "Puerto Rican", 
         "Mexican", "Cuban", "South/centra")              ~ "Hispanic",
-    TRUE                                                 ~ Ethnicity
+    TRUE                                                 ~ ethnicity
   )) %>% 
   mutate(raceeth = case_when(
-    Race == "White" &
-      Ethnicity == "Non-Hispanic"        ~ "White Non-Hispanic",
-    Race == "Black" &
-      Ethnicity == "Non-Hispanic"        ~ "Black Non-Hispanic",
-    Ethnicity == "Hispanic"              ~ "Hispanic",
-    Race %in% 
+    race == "White" &
+      ethnicity == "Non-Hispanic"        ~ "White Non-Hispanic",
+    race == "Black" &
+      ethnicity == "Non-Hispanic"        ~ "Black Non-Hispanic",
+    ethnicity == "Hispanic"              ~ "Hispanic",
+    race %in% 
       c("Other", "Unknown") |
-      Ethnicity == "Unknown"             ~ "Other/Unknown"
+      ethnicity == "Unknown"             ~ "Other/Unknown"
   )) %>% 
   
   mutate(preDx_hypertension = case_when(
@@ -168,11 +167,10 @@ clinical <- clinical %>%
   filter(grade_differentiation != "Well Differentiated" | is.na(grade_differentiation)) %>% 
   # left_join(ID_linkage, ., by = "mrn") %>% 
   select(#-mrn, 
-    -c(complete_, moffitt_patient, summary_of_rx_1st_course, summary_of_rx_1st_course_at_t, subject_number))
+    -c(moffitt_patient, summary_of_rx_1st_course, summary_of_rx_1st_course_at_t, subject_number))
 
-clinical_cleaning <- function(data) {
+clinical_var <- function(data) {
   data <- data %>% 
-    
     # For summary stats
     mutate(age_at_Dx = round(interval(start = date_of_birth, end = date_of_diagnosis)/
                                duration(n=1, units = "years"), 2)) %>% 
@@ -200,12 +198,12 @@ clinical_cleaning <- function(data) {
     
     mutate(recurrence_time = round(interval(start = first_treatment_date, end = rec_event_date)/
                                                   duration(n=1, units = "months"), 2)) %>% 
-    mutate(rec_event = ifelse((has_the_patient_recurred_ == "no"), 0, 1)) %>%
-    mutate(has_the_patient_recurred_ = case_when(
-      str_detect(has_the_patient_recurred_, "Yes|yes")          ~ "Recurrence",
-      str_detect(has_the_patient_recurred_, "No|no")           ~ "No Recurrence"
+    mutate(rec_event = ifelse((has_the_patient_recurred == "no"), 0, 1)) %>%
+    mutate(has_the_patient_recurred = case_when(
+      str_detect(has_the_patient_recurred, "Yes|yes")          ~ "Recurrence",
+      str_detect(has_the_patient_recurred, "No|no")           ~ "No Recurrence"
     )) %>%
-    mutate(has_the_patient_recurred_ = factor(has_the_patient_recurred_, 
+    mutate(has_the_patient_recurred = factor(has_the_patient_recurred, 
                                               levels = c("Recurrence", "No Recurrence")) ) %>% 
     
     # For survivals
@@ -237,10 +235,10 @@ clinical_cleaning <- function(data) {
       date_of_first_recurrence > date_of_first_surgery    ~ date_of_first_recurrence,
       TRUE                                                ~ NA_POSIXct_
     )) %>%
-    mutate(has_the_patient_recurred_after_surg = ifelse(!is.na(recurrence_date_after_surgery), "Recurrence", "No Recurrence"))
+    mutate(has_the_patient_recurredafter_surg = ifelse(!is.na(recurrence_date_after_surgery), "Recurrence", "No Recurrence"))
 }
 
-clinical <- clinical_cleaning(data = clinical)
+clinical <- clinical_var(data = clinical)
 write_rds(clinical, "clinical.rds")
 
 ################################################################################################# IV ### Bind df----
