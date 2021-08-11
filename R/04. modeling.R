@@ -102,11 +102,8 @@ concordance <- read_rds("concordance.rds") %>%
   select(name) %>% 
   mutate(stable_features = str_match(name, "([a-z][:digit:]*)_*")[,2])
 
-stable_features <- paste0(paste("nor_", concordance$stable_features, "[a-z]", sep = ""), collapse = "|")
-# radiomics <- read_csv(
-#   paste0(path,
-#          "/data/Merge clinical and radiomics data/Ovarian_Normalized_Radiomics_Features_05242021.csv")) #%>% 
-#   select(matches(stable_features))
+stable_features <- paste0(paste(#"nor_", 
+                                concordance$stable_features, "[a-z]", sep = ""), collapse = "|")
 
 mldata <- read_rds("radiomics.rds") %>% 
   select(mrn, matches(stable_features)) %>% 
@@ -788,7 +785,7 @@ xgboost_results <- final_xgboost %>%
 
 
 
-# OR SIMPLE DECISION TREE
+###################################################################################### OR SIMPLE DECISION TREE
 
 tree_spec <- decision_tree(
   cost_complexity = tune(),

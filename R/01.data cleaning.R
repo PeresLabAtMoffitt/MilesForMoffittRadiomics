@@ -20,8 +20,8 @@ capwords <- function(s, strict = FALSE) {
   sapply(strsplit(s, split = " "), cap, USE.NAMES = !is.null(names(s)))
 }
 ################################################################################################# I ### Load data----
-features <- read_csv(paste0("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_01062021.csv")) %>%
-  `colnames<-`(str_remove(colnames(.), "F[0-9]*\\:") %>% tolower() %>% gsub("[()^]", "",.) %>% str_replace_all(., " ", "_")) # %>% 
+# features <- read_csv(paste0("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_01062021.csv")) %>%
+#   `colnames<-`(str_remove(colnames(.), "F[0-9]*\\:") %>% tolower() %>% gsub("[()^]", "",.) %>% str_replace_all(., " ", "_")) # %>% 
   # mutate(rad = "radiom") %>%
   # group_by(mrn) %>%
   # mutate(id = cur_group_id()) %>% # %>% str_replace_all(., "\\^", "")
@@ -35,12 +35,18 @@ features <- read_csv(paste0("/Users/colinccm/Documents/GitHub/Peres/data/Radiomi
 
 # ID_linkage <- features %>% select(c(mrn, patient_id)) %>% distinct(patient_id, .keep_all = TRUE)
 # write_csv(ID_linkage, "ID_linkage.csv")
-ID_linkage <- read_csv("ID_linkage.csv")
-features <- features %>%
-  left_join(ID_linkage, ., by = "mrn") %>% select(-mrn)
-colnames(features)[54]
+# ID_linkage <- read_csv("ID_linkage.csv")
+# features <- features %>%
+#   left_join(ID_linkage, ., by = "mrn") %>% select(-mrn)
+# colnames(features)[54]
 
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
+features <-
+  read_csv(paste0(path, "/data/anlysis dataset/merge_clinical_normalized_radiomics_M4MOC_ct variable 05242021.csv")) %>% 
+  select(mrn, lesionid, matches("^f[0-9]")) %>% 
+  drop_na(lesionid) %>% 
+  mutate(mrn = as.character(mrn))
+
 
 clinical <- readxl::read_xlsx(
   paste0(path,
@@ -48,19 +54,20 @@ clinical <- readxl::read_xlsx(
 
 
 ################################################################################################# II ### Features----
-summary(features)
+summary(features[3])
 class(features) <- "data.frame"
 # scale data from -1 to 1
 for(i in 1:length(colnames(features))) {
   if(class(features[,i]) == "numeric" | class(features[,i]) == "integer") {
     features[,i] <- scales::rescale(features[,i], to=c(-1,1)) }
 }
-summary(features)
+summary(features[3])
 
 
 ################################################################################################# III ### Clinical----
 clinical <- clinical %>% 
   janitor::clean_names() %>% 
+  mutate(mrn = as.character(mrn)) %>% 
   `colnames<-`(
     str_remove(colnames(.), "_cancer_registry") %>% 
       tolower() %>% 
@@ -242,21 +249,22 @@ clinical <- clinical_var(data = clinical)
 write_rds(clinical, "clinical.rds")
 
 ################################################################################################# IV ### Bind df----
-radiomics <- full_join(features, clinical, by = "patient_id") %>% 
-  filter(!is.na(lesion_id))
-
-
-################################################################################################# V ### New file----
-
-merge_data <- 
-  read_csv(paste0("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/merge_clinical_normalized_radiomics_M4MOC_03192021.csv")) %>% 
-  select("mrn", "date", "lesionid", "segmentedby", first(starts_with("nor_")):ncol(.)) %>% 
-  mutate(across(
-    .cols = contains("date"),
-    .fns = ~ as.POSIXct(., format = "%m/%d/%Y"))) 
-
-final_data <- clinical_cleaning(data = merge_data) %>% 
+radiomics <- full_join(features, clinical, by = "mrn") %>% 
   filter(!is.na(lesionid))
-write_rds(final_data, "radiomics.rds")
+write_rds(radiomics, "radiomics.rds")
+
+
+################################################################################################# V ### New file---- Obsolete 
+
+# merge_data <- 
+#   read_csv(paste0("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/merge_clinical_normalized_radiomics_M4MOC_03192021.csv")) %>% 
+#   select("mrn", "date", "lesionid", "segmentedby", first(starts_with("nor_")):ncol(.)) %>% 
+#   mutate(across(
+#     .cols = contains("date"),
+#     .fns = ~ as.POSIXct(., format = "%m/%d/%Y"))) 
+
+# final_data <- clinical_cleaning(data = merge_data) %>% 
+#   filter(!is.na(lesionid))
+# write_rds(final_data, "radiomics.rds")
 
 
