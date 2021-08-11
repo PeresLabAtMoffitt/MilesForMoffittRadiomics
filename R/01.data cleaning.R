@@ -44,8 +44,8 @@ path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
 features <-
   read_csv(paste0(path, "/data/anlysis dataset/merge_clinical_normalized_radiomics_M4MOC_ct variable 05242021.csv")) %>% 
   select(mrn, lesionid, matches("^f[0-9]")) %>% 
-  drop_na(lesionid) %>% 
-  mutate(mrn = as.character(mrn))
+  drop_na(lesionid) #%>% 
+  # mutate(mrn = as.character(mrn))
 
 
 clinical <- readxl::read_xlsx(
@@ -57,7 +57,7 @@ clinical <- readxl::read_xlsx(
 summary(features[3])
 class(features) <- "data.frame"
 # scale data from -1 to 1
-for(i in 1:length(colnames(features))) {
+for(i in 2:length(colnames(features))) {
   if(class(features[,i]) == "numeric" | class(features[,i]) == "integer") {
     features[,i] <- scales::rescale(features[,i], to=c(-1,1)) }
 }
@@ -67,7 +67,7 @@ summary(features[3])
 ################################################################################################# III ### Clinical----
 clinical <- clinical %>% 
   janitor::clean_names() %>% 
-  mutate(mrn = as.character(mrn)) %>% 
+  # mutate(mrn = as.character(mrn)) %>% 
   `colnames<-`(
     str_remove(colnames(.), "_cancer_registry") %>% 
       tolower() %>% 
