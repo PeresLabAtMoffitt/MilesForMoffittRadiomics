@@ -713,7 +713,7 @@ final_fit_sec %>% collect_predictions() %>%
   facet_wrap(. ~ set)
 
 
-############################################################################################### DECISION TREE
+############################################################################################### DECISION TREE----
 # xgboost_recipe <- 
 #   recipe(formula = has_the_patient_recurred ~ ., data = train_data) %>% 
 #   step_novel(all_nominal(), -all_outcomes()) %>% 
@@ -786,7 +786,82 @@ xgboost_results <- final_xgboost %>%
 
 
 ###################################################################################### OR SIMPLE DECISION TREE
+# Fitting Classification Trees
+# this model was fit on the whole data set so we only get the training accuracy 
 
+tree_spec <- decision_tree() %>%
+  set_engine("rpart")%>%
+  set_mode("classification")
+
+tree_fit <- tree_spec %>%
+  fit(has_the_patient_recurred ~ ., data = train_data)
+
+tree_fit
+
+tree_fit %>%
+  extract_fit_engine() %>%
+  summary()
+
+tree_fit %>%
+  extract_fit_engine() %>%
+  rpart.plot()
+
+augment(tree_fit, new_data = mldata) %>%
+  accuracy(truth = High, estimate = .pred_class)
+# The training accuracy of this model is [.estimate]
+
+augment(tree_fit, new_data = mldata) %>%
+  conf_mat(truth = High, estimate = .pred_class)
+
+# this model was fit on the whole data set so we only get the training accuracy which could be misleading if the model is overfitting. Let us redo the fitting by creating a validation split and fit the model on the training data set.
+
+set.seed(1234)
+data_split <- initial_split(mldata)
+
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+tree_fit <- fit(tree_spec, 
+                      has_the_patient_recurred ~ ., data = train_data)
+augment(tree_fit, new_data = train_data) %>%
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class)
+augment(tree_fit, new_data = test_data) %>%
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class)
+augment(tree_fit, new_data = test_data) %>%
+  accuracy(truth = has_the_patient_recurred, estimate = .pred_class)
+
+# Let's tune!!!
+
+class_tree_wf <- workflow() %>%
+  add_model(class_tree_spec %>% set_args(cost_complexity = tune())) %>%
+  add_formula(has_the_patient_recurred ~ .)
+
+set.seed(1234)
+mldata_fold <- vfold_cv(mldata)
+
+param_grid <- grid_regular(cost_complexity(range = c(-3, -1)), levels = 10)
+
+tune_res <- tune_grid(
+  class_tree_wf, 
+  resamples = mldata_fold, 
+  grid = param_grid, 
+  metrics = metric_set(accuracy)
+)
+autoplot(tune_res)
+
+best_complexity <- select_best(tune_res)
+
+class_tree_final <- finalize_workflow(class_tree_wf, best_complexity)
+
+class_tree_final_fit <- fit(class_tree_final, data = mldata_train)
+class_tree_final_fit
+
+class_tree_final_fit %>%
+  extract_fit_engine() %>%
+  rpart.plot()
+
+
+# With workflow
 tree_spec <- decision_tree(
   cost_complexity = tune(),
   tree_depth = tune(),
