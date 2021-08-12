@@ -234,12 +234,6 @@ tree_final_fit %>%
   extract_fit_engine() %>%
   rpart.plot()
 
-tree_results <- final_tree %>% 
-  fit_resamples(
-    resamples = mldata_folds,
-    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
-    control = control_resamples(save_pred = TRUE)
-  )
 
 ############################################################################################### xgboost----
 # xgboost_recipe <- 
@@ -300,16 +294,6 @@ xgboost_tune %>% select_best("roc_auc")
 final_xgboost <- xgboost_workflow %>% 
   finalize_workflow(select_best(xgboost_tune, "roc_auc"))
 final_xgboost
-
-
-# Calculate Performance Metrics again with our last tuned model
-#Plot the ROC curve
-xgboost_results <- final_xgboost %>% 
-  fit_resamples(
-    resamples = mldata_folds,
-    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
-    control = control_resamples(save_pred = TRUE)
-  )
 
 
 ############################################################################################### RAMDOM FOREST ----
@@ -420,7 +404,7 @@ train_data_lambda <- training(data_split) %>%
   drop_na() %>% select(-mrn)
 
 # Dummy code categorical predictor variables
-x <- model.matrix(has_the_patient_recurred ~ ., data = train_data_lambda)[,-1]
+x <- model.matrix(has_the_patient_recurred ~ .-w_wo_contrast, data = train_data_lambda)[,-1]
 # Convert the outcome (class) to a numerical variable
 y <- ifelse(train_data_lambda$has_the_patient_recurred == "Recurrence", 1, 0)
 
@@ -515,8 +499,21 @@ final_glmnet <- glmnet_workflow %>%
 final_glmnet
 
 
-# Calculate Performance Metrics again with our last tuned model
-#Plot the ROC curve
+################################################################### Calculate Performance Metrics with tuned model----
+tree_results <- final_tree %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
+  )
+
+xgboost_results <- final_xgboost %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
+  )
+
 glmnet_results <- final_glmnet %>% 
   fit_resamples(
     resamples = mldata_folds,
@@ -536,17 +533,31 @@ rf_results <- final_rf %>%
 
 ############################################################################################### EVALUATE MODELS ----
 # Explore Performance Metrics
+collect_metrics(xgboost_results)
+collect_metrics(tree_results)
 collect_metrics(rf_results)
 collect_metrics(glmnet_results)
 # Accuracy is llow
 # Sensitivity has 50% chance finding the minority class pop
 
+xgboost_results %>% 
+  conf_mat_resampled()
+tree_results %>% 
+  conf_mat_resampled()
 rf_results %>% 
   conf_mat_resampled()
 glmnet_results %>% 
   conf_mat_resampled()
 
 # Visualization
+xgboost_results %>% # is the saved predictions
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()
+tree_results %>% 
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()
 rf_results %>% # is the saved predictions
   collect_predictions() %>% 
   conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
@@ -556,6 +567,16 @@ glmnet_results %>%
   conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
   autoplot()
 
+xgboost_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+  autoplot()
+tree_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+  autoplot()
 rf_results %>% 
   collect_predictions() %>% 
   group_by(id) %>% 
@@ -573,6 +594,12 @@ rf_results %>% # Compare both models
   bind_rows(glmnet_results %>% 
               collect_predictions() %>% 
               mutate(model = "glmet")) %>% 
+  bind_rows(xgboost_results %>% 
+              collect_predictions() %>% 
+              mutate(model = "xgboost")) %>% 
+  bind_rows(tree_results %>% 
+              collect_predictions() %>% 
+              mutate(model = "tree")) %>% 
   group_by(model) %>% 
   roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
   autoplot()
@@ -580,8 +607,12 @@ rf_results %>% # Compare both models
 
 
 # Calculate prediction after the fact
-rf_results %>% collect_predictions() %>% group_by(id) %>% 
+xgboost_results %>% collect_predictions() %>% group_by(id) %>% 
   ppv(truth = has_the_patient_recurred, estimate = .pred_class) # do histog
+tree_results %>% collect_predictions() %>% group_by(id) %>% 
+  ppv(truth = has_the_patient_recurred, estimate = .pred_class)
+rf_results %>% collect_predictions() %>% group_by(id) %>% 
+  ppv(truth = has_the_patient_recurred, estimate = .pred_class)
 glmnet_results %>% collect_predictions() %>% group_by(id) %>% 
   ppv(truth = has_the_patient_recurred, estimate = .pred_class)
 
@@ -589,7 +620,7 @@ glmnet_results %>% collect_predictions() %>% group_by(id) %>%
 
 ############################################################################################### Step Explore of features importance ----
 library(vip) 
-
+################ glmnet----
 # Need to train the model one more time but without tuning to go faster
 importance_spec <- glmnet_spec %>% 
   finalize_model(select_best(glmnet_tune, "roc_auc")) %>% 
@@ -635,6 +666,18 @@ workflow() %>%
   vi() %>% 
   mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance))
 
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  extract_fit_parsnip() %>% 
+  vi() %>% 
+  mutate(Importance = ifelse(Sign == "NEG", -Importance, Importance)) %>% 
+  arrange(desc(abs(Importance))) %>% 
+  filter(abs(Importance) > 20) %>% 
+  ggplot(aes(x= fct_reorder(Variable, abs(Importance))  , y = Importance, fill = Sign)) +
+  geom_bar(stat = "identity") + 
+  coord_flip()
 
 ###################################### Ranger
 
@@ -675,25 +718,6 @@ workflow() %>%
 # ggplot(aes(x= desc(fct_reorder(Variable, abs(Importance)))  , y = Importance, fill = Sign)) +
 # geom_bar(stat = "identity")
 
-
-############################################################################################### EVALUATE MODELS ----
-# Explore Performance Metrics
-collect_metrics(rf_results)
-collect_metrics(glmnet_results)
-collect_metrics(xgboost_results)
-collect_metrics(tree_results)
-
-# Accuracy is llow
-# Sensitivity has 50% chance finding the minority class pop
-
-rf_results %>% 
-  conf_mat_resampled()
-glmnet_results %>% 
-  conf_mat_resampled()
-xgboost_results %>% 
-  conf_mat_resampled()
-tree_results %>% 
-  conf_mat_resampled()
 
 ############################################################################################### DRAW TREE
 final_fit <- last_fit(final_xgboost, data_split)

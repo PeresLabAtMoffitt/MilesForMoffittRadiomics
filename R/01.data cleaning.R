@@ -43,9 +43,9 @@ capwords <- function(s, strict = FALSE) {
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
 features <-
   read_csv(paste0(path, "/data/anlysis dataset/merge_clinical_normalized_radiomics_M4MOC_ct variable 05242021.csv")) %>% 
+  filter(isbiggesttumor == 1) %>%
   select(mrn, lesionid, matches("^f[0-9]")) %>% 
-  drop_na(lesionid) #%>% 
-  # mutate(mrn = as.character(mrn))
+  drop_na(lesionid)
 
 
 clinical <- readxl::read_xlsx(
@@ -76,6 +76,9 @@ clinical <- clinical %>%
   mutate(across(where(is.character), .fns = ~ tolower(.))) %>%
   mutate(across(where(is.character), .fns = ~ capwords(.))) %>%
   mutate(across(where(is.character), .fns = ~ str_replace(., "NANA", NA_character_))) %>%
+  # Remove low grade - well differentiated cases
+  filter(grade_differentiation != "Well Differentiated" | is.na(grade_differentiation)) %>% 
+  filter(str_detect(treatment_type, "Upfront")) %>%
   # rename(race = "race", ethnicity = "ethnicity") %>%
   mutate(race = case_when(
     race %in% 
@@ -170,8 +173,10 @@ clinical <- clinical %>%
   # ))
 
   mutate(date_of_first_adjuvant_chemother = as.POSIXct(date_of_first_adjuvant_chemother, format = "%m/%d/%y")) %>% 
-  # Remove low grade - well differentiated cases
-  filter(grade_differentiation != "Well Differentiated" | is.na(grade_differentiation)) %>% 
+  mutate(debulking_status = case_when(
+    debulking_status == "Incomplete Records"    ~ NA_character_,
+    TRUE                                        ~ debulking_status
+  )) %>% 
   # left_join(ID_linkage, ., by = "mrn") %>% 
   select(#-mrn, 
     -c(moffitt_patient, summary_of_rx_1st_course, summary_of_rx_1st_course_at_t, subject_number))
