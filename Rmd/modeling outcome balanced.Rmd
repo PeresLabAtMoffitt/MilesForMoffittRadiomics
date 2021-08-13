@@ -38,6 +38,15 @@ options(gtsummary.print_engine = "gt")
 options(gtsummary.as_gt.addl_cmds = "gt::tab_options(table.font.size = 14, data_row.padding = gt::px(1))")
 ```
 
+<style>
+div.blue { background-color:#FF9966; border-radius: 5px; padding: 20px; font-size: 38px}
+</style>
+<div class = "blue">
+
+<span style="color: white;">Recurrence prediction</span>
+
+</div>
+<br>
 
 ```{r library}
 library(tidyverse)
@@ -51,7 +60,8 @@ library(gtsummary)
 
 ```{r load}
 clinical <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/clinical.rds") %>% 
-  select(mrn, has_the_patient_recurred, w_wo_contrast, rec_event, recurrence_time, os_event, os_time)
+  select(mrn, has_the_patient_recurred, w_wo_contrast, rec_event, recurrence_time, os_event, os_time,
+         age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type, raceeth)
 
 concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance.rds") %>% 
   filter(value_CCC >= 0.95) %>% 
@@ -67,15 +77,57 @@ mldata <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiom
   select(mrn, has_the_patient_recurred, w_wo_contrast),
              by = "mrn") %>% 
   filter(!is.na(.[2]))
+
+clinical <- clinical %>% 
+  filter(str_detect(mrn, paste(mldata$mrn, collapse = "|")))
 ```
 
-# Patients data
+# `r emo::ji("question_mark")`
+
+The patient ....... has 2 “biggest” tumor  
+1 patient has NA in contrast/no contrast variable  
+
+# Stydy population
+
+<div class = "row">
+<div class = "col-md-5">
 ```{r demo}
 mldata %>% select(has_the_patient_recurred, w_wo_contrast) %>% 
   tbl_summary(type = list(w_wo_contrast ~ "categorical"))
-```
 
-The data is split in 3/4 for trining and testing
+mldata %>%
+  full_join(., clinical) %>% 
+  select(age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type, raceeth) %>% 
+  tbl_summary()
+```
+</div>
+
+<div class = "col-md-7">
+```{r}
+p <- qplot(x =age_at_diagnosis, data=subset(clinical,!is.na(age_at_diagnosis)),
+           fill=..count.., geom="histogram", bins = 25) 
+p + scale_fill_viridis_c(
+  alpha = 1,
+  begin = 0,
+  end = 1,
+  direction = 1,
+  option = "A",
+  values = NULL,
+  space = "Lab",
+  na.value = "grey50",
+  guide = "colourbar",
+  aesthetics = "fill"
+) +
+  theme_minimal(base_size = 16) +
+  labs(x="Age at Diagnosis", y="Number of Patient", title="Repartition of Age at Diagnosis")
+```
+</div>
+</div>
+
+<br>
+
+
+The data is split in 3/4 for training and testing for better robustness
 ```{r}
 # Explore what will need to be changed
 skimr::skim(mldata)
@@ -100,6 +152,87 @@ train_data %>%
               type = list(w_wo_contrast ~ "categorical")) %>% 
   add_p()
 ```
+
+# Stable features
+
+75 stable features were selected after concordance analysis with a concordance ≥ 0.95.
+
+```{r heatplot}
+library(gplots)
+
+df1 <- as.data.frame(mldata %>% full_join(., clinical %>% 
+                                            select(mrn, tnm_cs_mixed_group_stage, raceeth)) %>% 
+                       select(-w_wo_contrast)) %>% 
+  distinct(mrn, .keep_all = TRUE) %>% 
+  # arrange(has_the_patient_recurred) %>%
+  unite(mrn, c(mrn, has_the_patient_recurred, tnm_cs_mixed_group_stage, raceeth), sep = "_", remove = TRUE) %>% 
+  `row.names<-`(.$mrn) %>% 
+  select(-mrn)
+
+# Create matrix and drop NA, scale on patient
+df2 <- t(scale(t(as.matrix(df1)))) # scale for standardizing the data to make variables comparable
+# df2 <- df2[complete.cases(df2 * 0), , drop=FALSE]
+
+# Create colors for cluster
+condition_colors <- unlist(lapply(rownames(df2), function(x){
+  if(grepl("No Recurrence", x)) "grey"
+  else if(grepl("Recurrence", x)) "pink"
+}))
+
+condition_colors1 <- unlist(lapply(rownames(df2), function(x){
+  case_when(
+    str_detect(x, "1") ~ "steelblue1",
+    str_detect(x, "2") ~ "black",
+    str_detect(x, "3") ~ "tan1",
+    str_detect(x, "4") ~ "orange",
+    TRUE          ~ NA_character_)
+}))
+
+condition_colors2 <- unlist(lapply(rownames(df2), function(x){
+  case_when(
+    str_detect(x, "White") ~ "#03051AFF",
+    str_detect(x, "Black") ~ "red",
+    str_detect(x, "Hispanic") ~ "blue",
+    str_detect(x, "Other") ~ "darkgrey")
+}))
+
+
+mycols <- cbind(condition_colors, condition_colors1)
+
+# Transpose
+df2 <- t(df2)
+
+heatmap.2(df2, #main = "kjh",
+          trace = "none", density="none", col=bluered(20), cexRow=1,
+          lwid=c(1.2, 10), # decrease width of left dendro
+          # lhei=c(1.1, 10), 
+          margins = c(1,10), # bottom, right
+          ColSideColors = condition_colors,
+          scale = "none",
+          # Colv = FALSE,
+          key.par=list(mgp=c(1.5, 0.5, 0), # pos for value, number, axes
+                       mar=c(3.5, 1, 2.5, 1) # color key pos down, left, top, right
+                       )
+          )
+legend(0.78, 0.95, # right, up
+       legend = c("Recurrence", "No Recurrence"), fill = c("pink", "grey"), cex = 0.6,
+       bty = "n")
+
+# heatmap.plus(df2,
+#              col = bluered(20),
+#              cexRow = 1,
+#              margins = c(1, 10),
+#              # bottom, right
+#              ColSideColors = mycols,
+#              scale = "none"
+# )
+# legend(0.78, 0.95, # right, up
+#        legend = c("Recurrence", "No Recurrence"), fill = c("pink", "grey"), cex = 0.6,
+#        bty = "n")
+```
+
+
+
 
 # HR of recurrence
 ```{r}
