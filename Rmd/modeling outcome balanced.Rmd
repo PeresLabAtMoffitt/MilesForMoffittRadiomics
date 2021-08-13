@@ -55,6 +55,7 @@ library(tidymodels)
 # library(dotwhisker)  # for visualizing regression results
 library(themis)
 library(gtsummary)
+library(ggcorrplot)
 ```
 
 
@@ -126,38 +127,12 @@ p + scale_fill_viridis_c(
 
 <br>
 
-
-The data is split in 3/4 for training and testing for better robustness
-```{r}
-# Explore what will need to be changed
-skimr::skim(mldata)
-
-set.seed(123)
-
-# 1. Splitting the data
-# 3/4 of the data into the training set but split evenly winthin race
-data_split <- initial_split(mldata, prop = 3/4, strata = w_wo_contrast)
-# Create training and testing datasets:
-train_data <- training(data_split)
-test_data  <- testing(data_split)
-```
-
-```{r demo split}
-train_data %>% 
-  mutate(set = "training") %>% 
-  bind_rows(., test_data %>% 
-  mutate(set = "testing")) %>% 
-  select(has_the_patient_recurred, w_wo_contrast, set) %>% 
-  tbl_summary(by = set,
-              type = list(w_wo_contrast ~ "categorical")) %>% 
-  add_p()
-```
-
 # Stable features
 
 75 stable features were selected after concordance analysis with a concordance ≥ 0.95.
 
-```{r heatplot}
+## Heatmap
+```{r heatplot, fig.width=12}
 library(gplots)
 
 df1 <- as.data.frame(mldata %>% full_join(., clinical %>% 
@@ -230,11 +205,37 @@ legend(0.78, 0.95, # right, up
 #        legend = c("Recurrence", "No Recurrence"), fill = c("pink", "grey"), cex = 0.6,
 #        bty = "n")
 ```
+<br>
+<br>
 
+## Correlation
 
+```{r, fig.height=12, fig.width=12}
+a <- mldata %>% select(matches("^f[0-9]"))
+p.mat <- cor_pmat(a)
+mat <- cor(a, use = "pairwise.complete.obs")
+ggcorrplot(mat, hc.order = TRUE, method = "square", 
+           # p.mat = p.mat, # Barring the no significant coefficient
+           insig = "blank", # Leave blank on no significant coefficient
+           type = "lower", 
+           # lab = TRUE, 
+           title = "Correlation between radiomics features",
+           show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
+           # lab_col = "darkblue", lab_size = 3, 
+           sig.level = 0.05, #insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10, 
+           tl.cex = 10,
+           tl.srt = 90,
+           # digits = 1,
+           outline.color = "white",
+  ggtheme = ggplot2::theme_gray,
+  colors = c("blue", "white", "#E46726")#6D9EC1
+)
+```
+<br>
+<br>
 
-
-# HR of recurrence
+# Impact of features on HR
+## HR of recurrence
 ```{r}
 rec_data <- mldata %>% 
   left_join(., clinical %>% 
@@ -272,7 +273,7 @@ rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
   bold_labels() %>% italicize_levels()
 ```
 
-# HR of death
+## HR of death
 ```{r}
 rec_data <- mldata %>% 
   left_join(., clinical %>% 
@@ -311,6 +312,46 @@ rec_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
 ```
 
 
+# Build a model
+## Splitting the data
+
+The data is split in 3/4 for training and testing for better robustness.  
+A strata is applied to the split function to balance w_wo_contrast in both sets.  
+```{r}
+# Explore what will need to be changed
+skimr::skim(mldata)
+
+set.seed(123)
+
+# 1. Splitting the data
+# 3/4 of the data into the training set but split evenly winthin race
+data_split <- initial_split(mldata, prop = 3/4, strata = w_wo_contrast)
+# Create training and testing datasets:
+train_data <- training(data_split)
+test_data  <- testing(data_split)
+```
+
+```{r demo split}
+train_data %>% 
+  mutate(set = "training") %>% 
+  bind_rows(., test_data %>% 
+  mutate(set = "testing")) %>% 
+  select(has_the_patient_recurred, w_wo_contrast, set) %>% 
+  tbl_summary(by = set,
+              type = list(w_wo_contrast ~ "categorical")) %>% 
+  add_p()
+```
+
+
+
+## Buil a recipe
+
+It is an imbalance between Recurrence and no recurrence cases, the models use `step_smote` to balance the cases in the training data.  
+It use nearest neighbor to create new synthetic observation almost similar.  
+To increase accuracy, I used tuning function to select the best number of tree, number of node, sample_size, penalty,, etc... and avoid bias decision.
+I used a 10 fold cross validation for the tuning for better tuning. It evaluate metrics like accuracy and roc_auc 10 times on a different split of the training set.
+A strata is again applied to the cross validation sets to balance w_wo_contrast.  
+
 ```{r}
 # 2. Data pre processing and features engineering + imputation
 # Recipe
@@ -326,12 +367,16 @@ mldata_recipe <-
   # step_other(Histology, threshold = 0.05) %>% 
   # data_recipe %>% prep() %>% juice() %>% count(Histology)
   
+  # step_novel(all_nominal(), -all_outcomes()) %>% # Create a previously unseen factor level to a new value.
+
   # 4.Imputation
   step_unknown(all_nominal_predictors()) %>% 
   # step_impute_median(all_numeric_predictors()) %>%
   # 5.change all factor to indicator/dummy variables for model that cannot handle factor variables
   step_dummy(all_nominal(), -all_outcomes()) %>%
   
+  # step_normalize(all_predictors(), -all_nominal()) # Normalize numeric value, important for glmnet
+
   # Feature engineering on dates
   # step_date(all_of(meaningful_dates), features = c("year", "month")) %>% 
   # step_rm(meaningful_dates)
@@ -605,20 +650,12 @@ plot(cv.lasso)
 # # Display regression coefficients
 # coef(model)
 
-# library(usemodels) # Gives a scaffolding of the modeling code
-# use_glmnet(has_the_patient_recurred ~ ., data = train_data)
 
-# glmnet_recipe <- 
-#   recipe(formula = has_the_patient_recurred ~ ., data = train_data) %>% 
-#   step_novel(all_nominal(), -all_outcomes()) %>% 
-#   step_dummy(all_nominal(), -all_outcomes()) %>% 
-#   step_zv(all_predictors()) %>% 
-#   step_normalize(all_predictors(), -all_nominal()) 
 
 set.seed(789)
 
 glmnet_spec <- 
-  logistic_reg(penalty = tune(), mixture = tune()) %>% 
+  logistic_reg(penalty = tune(), mixture = tune()) %>% # Looks ridge would increase really slightly mixture = 0
   set_mode("classification") %>% 
   set_engine("glmnet") 
 
@@ -627,12 +664,14 @@ glmnet_workflow <-
   add_recipe(mldata_recipe) %>% 
   add_model(glmnet_spec) 
 
-glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20), mixture = c(0.05, 
+glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20), mixture = c(0, 0.05, 
                                                                                       0.2, 0.4, 0.6, 0.8, 1)) 
-
 glmnet_tune <- 
   tune_grid(glmnet_workflow, resamples = mldata_folds, grid = glmnet_grid) 
 
+# glmnet_tune <- tune_grid(glmnet_workflow, 
+#             resamples = mldata_folds, 
+#             grid = 20)
 ############################################################################### II ### Explore Tuning Results ----
 
 
@@ -672,18 +711,18 @@ xgboost_results <- final_xgboost %>%
     control = control_resamples(save_pred = TRUE)
   )
 
-glmnet_results <- final_glmnet %>% 
-  fit_resamples(
-    resamples = mldata_folds,
-    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
-    control = control_resamples(save_pred = TRUE)
-  )
-
 rf_results <- final_rf %>% 
   fit_resamples( # is not doing any tuning, measuring performance on cross validation data
     resamples = mldata_folds,
     metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
     control = control_resamples(save_pred = TRUE, verbose = TRUE)
+  )
+
+glmnet_results <- final_glmnet %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
   )
 
 ###############################################################################  Support vector machine # not necessary
