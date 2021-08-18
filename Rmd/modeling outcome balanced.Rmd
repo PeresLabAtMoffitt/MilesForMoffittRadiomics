@@ -801,6 +801,50 @@ collect_metrics(glmnet_results)
 # Accuracy is llow
 # Sensitivity has 50% chance finding the minority class pop
 
+
+rf_results %>% # Compare both models
+  collect_metrics() %>% 
+  select(".metric", rf_mean = mean, rf_sd = std_err) %>% 
+  full_join(., glmnet_results %>% 
+              collect_metrics() %>% 
+              select(".metric", glmet_mean = mean, glmet_sd = std_err)
+            , by = ".metric") %>% 
+  full_join(., xgboost_results %>% 
+              collect_metrics() %>% 
+              select(".metric", xgboost_mean = mean, xgboost_sd = std_err)
+            , by = ".metric") %>% 
+  full_join(., tree_results %>% 
+              collect_metrics() %>% 
+              select(".metric", tree_mean = mean, tree_sd = std_err)
+            , by = ".metric")
+
+rf_results %>% # Compare both models
+  collect_metrics() %>% 
+  mutate(model = "rf") %>% 
+  # select(".metric", rf_mean = mean, rf_sd = std_err) %>% 
+  bind_rows(glmnet_results %>% 
+              collect_metrics() %>% 
+              mutate(model = "glmet")) %>% 
+  # select(glmet_mean = mean, glmet_sd = std_err)) %>% 
+  bind_rows(xgboost_results %>% 
+              collect_metrics() %>% 
+              mutate(model = "xgboost")) %>% 
+  # select(xgboost_mean = mean, xgboost_sd = std_err)) %>% 
+  bind_rows(tree_results %>% 
+              collect_metrics() %>% 
+              mutate(model = "tree")) %>% 
+  # select(tree_mean = mean, tree_sd = std_err)) %>% 
+  ggplot(aes(x= .metric, y=mean, fill = model))+
+  geom_bar(stat = "identity",
+           position = position_dodge())+
+  geom_errorbar(aes(x = .metric,
+                    ymin = mean - std_err,
+                    ymax = mean + std_err),
+                width = 0.2, alpha = 0.5,
+                position=position_dodge(width=0.9))+
+  theme_minimal()+
+  scale_fill_viridis_d()
+
 xgboost_results %>% 
   conf_mat_resampled()
 tree_results %>% 
@@ -963,9 +1007,11 @@ collect_metrics(final_fit) %>%
   ggplot(aes(x= .metric, y=mean, fill = set))+
   geom_bar(stat = "identity",
            position = position_dodge()) + 
-  geom_errorbar(aes(xmin = mean - std_err,
-                    xmax = mean + std_err),
-                width = 0.2, alpha = 0.5)
+  geom_errorbar(aes(x = .metric,
+                    ymin = mean - std_err,
+                    ymax = mean + std_err),
+                width = 0.2, alpha = 0.5,
+                position=position_dodge(width=0.9))
 collect_metrics(final_fit) %>% 
   mutate(set = "testing") %>% 
   rename(mean = .estimate) %>% 

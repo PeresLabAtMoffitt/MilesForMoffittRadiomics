@@ -205,7 +205,8 @@ clinical_var <- function(data) {
                                                   duration(n=1, units = "months"), 2)) %>% 
     # For recurrence
     mutate(first_treatment_date = 
-             coalesce(date_of_first_neoadjuvant_chemot, date_of_first_surgery, date_of_first_adjuvant_chemother)) %>% 
+             coalesce(date_of_first_neoadjuvant_chemot, date_of_first_surgery#, date_of_first_adjuvant_chemother
+                      )) %>% 
     mutate(rec_event_date = coalesce(date_of_first_recurrence, fwdate_most_recent)) %>% 
     
     mutate(recurrence_time = round(interval(start = first_treatment_date, end = rec_event_date)/
@@ -219,7 +220,7 @@ clinical_var <- function(data) {
                                               levels = c("Recurrence", "No Recurrence")) ) %>% 
     
     # For survivals
-    mutate(os_time = round(interval(start = date_of_diagnosis, end = fwdate_most_recent)/
+    mutate(os_time = round(interval(start = first_treatment_date, end = fwdate_most_recent)/
                                            duration(n=1, units = "months"), 2)) %>% 
     mutate(os_event = ifelse((vital_new == "Alive"), 0, 1)) %>% 
     
