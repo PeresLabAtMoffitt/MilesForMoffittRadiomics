@@ -88,12 +88,27 @@ clinical <- clinical %>%
 The patient ....... has 2 “biggest” tumor  
 1 patient has NA in contrast/no contrast variable  
 
-# Stydy population
+
+# `r emo::ji("memo")`
+
+From 451 clinical info,  
+ - 4 were removed for being grade_differentiation == "Well Differentiated"  
+ - 23 were removed for being treatment_type == "Chemo Only" ; **`r emo::ji("question_mark")` Should we include when clinical is not included in our model?**  
+ - 26 were removed for being treatment_type == "Surgery Only" (2 overlap with Well Differentiated)  
+From 538 radiomics tumor info,  
+ - 386 are biggest tumor (-1 bc of 1 patient as 2 “biggest” tumor)
+ - 345 patients are common with clinical data (aka -19 chemo only, -20 surg only, -3 well diff ; 1 is surg+well diff)  
+
+**We have now 345 patients in our cohort.**
+
+
+# Data exploration
+## Stydy population
 
 <div class = "row">
 <div class = "col-md-5">
 ```{r demo}
-mldata %>% select(has_the_patient_recurred, w_wo_contrast) %>% 
+mldata %>% select(w_wo_contrast) %>% 
   tbl_summary(type = list(w_wo_contrast ~ "categorical"))
 
 mldata %>%
@@ -126,6 +141,32 @@ p + scale_fill_viridis_c(
 </div>
 
 <br>
+
+<div class = "row">
+<div class = "col-md-5">
+```{r}
+mldata %>% 
+  select(has_the_patient_recurred) %>% 
+  tbl_summary(sort = list(everything() ~ "frequency"))
+```
+</div>
+
+<div class = "col-md-7">
+```{r}
+mldata %>% 
+  ggplot(aes(x= has_the_patient_recurred)) + 
+  geom_bar(fill = "darkslategray")+
+  coord_flip()+
+  theme_minimal(base_size = 20)+
+  labs(x = NULL)+
+  ggtitle("Imbalanced data for recurrence outcome")
+```
+</div>
+</div>
+
+<br>
+<br>
+
 
 # Stable features
 
@@ -312,6 +353,13 @@ rec_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
 ```
 
 
+```{r}
+rec_data %>% select(matches("^f[0-9]"), has_the_patient_recurred_) %>% 
+  tbl_summary(by = has_the_patient_recurred_, 
+              sort = list(everything() ~ "frequency")) %>% 
+  bold_labels() %>% add_p()
+```
+
 # Build a model
 ## Splitting the data
 
@@ -344,7 +392,7 @@ train_data %>%
 
 
 
-## Buil a recipe
+## Build a recipe
 
 It is an imbalance between Recurrence and no recurrence cases, the models use `step_smote` to balance the cases in the training data.  
 It use nearest neighbor to create new synthetic observation almost similar.  
@@ -393,7 +441,6 @@ mldata_folds <- vfold_cv(train_data, strata = w_wo_contrast)
 
 # DECISION TREE
 ```{r decision_tree}
-###################################################################################### DECISION TREE----
 set.seed(789)
 
 # With workflow
@@ -421,6 +468,17 @@ tree_tune <- tree_workflow %>%
     metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)
   )
 
+cart_spec <-
+   decision_tree() %>%
+   set_engine("rpart") %>%
+   set_mode("classification")
+
+cart_fit <- 
+   cart_spec %>%
+   fit(has_the_patient_recurred ~ ., data = train_data)
+cart_fit <- repair_call(cart_fit, data = train_data)
+
+
 # Explore
 
 autoplot(tree_tune) + theme_light()
@@ -436,6 +494,9 @@ library(rpart.plot)
 tree_final_fit %>%
   extract_fit_engine() %>%
   rpart.plot()
+
+library(rattle)
+fancyRpartPlot(cart_fit$fit)
 ```
 
 # KM by risk group
@@ -979,9 +1040,39 @@ final_fit_sec %>% collect_predictions() %>%
 ```
 
 
+# Outcome Analysis
 
+# logistic regression
+```{r}
+model <- glm(recurremce ~ treatment_type + preDx_comorbidities + age_at_Dx + Race + tnm_stage + debulking_status, data = radiomics, family = binomial)
+tbl1 <- tbl_regression(model)
+tbl2 <- tbl_regression(model, exponentiate = TRUE)
+tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Estimate**", "**Exp**"))
+```
 
+# HR
+```{r}
+rec_data <- mldata %>% 
+  left_join(., clinical %>% 
+  select(mrn, rec_event, recurrence_time,
+         raceeth, age_at_diagnosis, grade_differentiation, treatment_type), 
+  by = "mrn")
 
+tbl1 <- rec_data %>% select(rec_event, recurrence_time,
+                            raceeth, age_at_diagnosis, grade_differentiation, treatment_type,
+                            f144glszm_zone_) %>%
+  tbl_uvregression(method = survival::coxph, 
+                   y = (Surv(time = rec_data$recurrence_time, 
+                             event = rec_data$rec_event)),
+                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+  bold_labels() %>% italicize_levels()
+tbl2 <- coxph(Surv(time = rec_data$recurrence_time, 
+             event = rec_data$rec_event) ~ raceeth + age_at_diagnosis + grade_differentiation + treatment_type + f144glszm_zone_, data =  rec_data) %>%
+  tbl_regression(exponentiate = TRUE) %>% bold_p(t = .05)
+
+tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Univariable**", "**Multivariable**"))
+  
+```
 
 
 

@@ -42,7 +42,7 @@ capwords <- function(s, strict = FALSE) {
 
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
 features <-
-  read_csv(paste0(path, "/data/anlysis dataset/merge_clinical_normalized_radiomics_M4MOC_ct variable 05242021.csv")) %>% 
+  read_csv(paste0(path, "/data/analysis dataset/merge_clinical_normalized_radiomics_M4MOC_ct variable 05242021.csv")) %>% 
   filter(isbiggesttumor == 1) %>%
   select(mrn, lesionid, matches("^f[0-9]")) %>% 
   drop_na(lesionid)
@@ -50,7 +50,7 @@ features <-
 
 clinical <- readxl::read_xlsx(
   paste0(path,
-         "/data/anlysis dataset/radiomic_CT_final_v3.xlsx"))
+         "/data/analysis dataset/radiomic_CT_final_v3.xlsx"))
 
 
 ################################################################################################# II ### Features----
