@@ -61,7 +61,7 @@ library(ggcorrplot)
 
 ```{r load}
 clinical <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/clinical.rds") %>% 
-  select(mrn, has_the_patient_recurred, w_wo_contrast, rec_event, recurrence_time, os_event, os_time,
+  select(mrn, has_the_patient_recurred, rec_event, recurrence_time, os_event, os_time,
          age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type, raceeth)
 
 concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance.rds") %>% 
@@ -73,7 +73,7 @@ stable_features <- paste0(paste(#"nor_",
                                 concordance$stable_features, "[a-z]", sep = ""), collapse = "|")
 
 mldata <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/radiomics.rds") %>% 
-  select(mrn, matches(stable_features)) %>% 
+  select(mrn, contrastenhancementyn, matches(stable_features)) %>% 
   right_join(., clinical %>% 
   select(mrn, has_the_patient_recurred, w_wo_contrast),
              by = "mrn") %>% 
@@ -354,10 +354,11 @@ rec_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
 
 
 ```{r}
-rec_data %>% select(matches("^f[0-9]"), has_the_patient_recurred_) %>% 
-  tbl_summary(by = has_the_patient_recurred_, 
-              sort = list(everything() ~ "frequency")) %>% 
-  bold_labels() %>% add_p()
+rec_data %>% select(matches("^f[0-9]"), has_the_patient_recurred) %>% 
+  tbl_summary(by = has_the_patient_recurred, 
+              sort = list(everything() ~ "frequency"),
+              digits = list(everything() ~  2)) %>% 
+  bold_labels() %>% add_p() %>% bold_p(t = .05)
 ```
 
 # Build a model
@@ -461,6 +462,7 @@ tree_grid <- grid_regular(cost_complexity(),
                           min_n(), levels = 4)
 
 doParallel::registerDoParallel()
+set.seed(789)
 tree_tune <- tree_workflow %>% 
   tune_grid(
     resamples = mldata_folds,
@@ -469,15 +471,18 @@ tree_tune <- tree_workflow %>%
   )
 
 cart_spec <-
-   decision_tree() %>%
+   decision_tree(
+  #    cost_complexity = 1e-10
+  # tree_depth = 10
+  # min_n = 27
+   ) %>%
    set_engine("rpart") %>%
    set_mode("classification")
 
 cart_fit <- 
    cart_spec %>%
-   fit(has_the_patient_recurred ~ ., data = train_data)
+   fit(has_the_patient_recurred ~ .-mrn-w_wo_contrast, data = train_data)
 cart_fit <- repair_call(cart_fit, data = train_data)
-
 
 # Explore
 

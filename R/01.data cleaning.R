@@ -42,11 +42,13 @@ capwords <- function(s, strict = FALSE) {
 
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
 features <-
-  read_csv(paste0(path, "/data/analysis dataset/merge_clinical_normalized_radiomics_M4MOC_ct variable 05242021.csv")) %>% 
+  read_csv(paste0(path, "/data/analysis dataset/Clinical_normradiomics_08182021.csv")) %>% 
   filter(isbiggesttumor == 1) %>%
-  select(mrn, lesionid, matches("^f[0-9]")) %>% 
+  select(mrn, contrastenhancementyn, lesionid, matches("^f[0-9]")) %>% 
   drop_na(lesionid)
-
+contrast_info <- features %>% 
+  select(mrn, contrastenhancementyn)
+  
 
 clinical <- readxl::read_xlsx(
   paste0(path,
@@ -54,14 +56,14 @@ clinical <- readxl::read_xlsx(
 
 
 ################################################################################################# II ### Features----
-summary(features[3])
+summary(features[4])
 class(features) <- "data.frame"
 # scale data from -1 to 1
 for(i in 2:length(colnames(features))) {
   if(class(features[,i]) == "numeric" | class(features[,i]) == "integer") {
     features[,i] <- scales::rescale(features[,i], to=c(-1,1)) }
 }
-summary(features[3])
+summary(features[4])
 
 
 ################################################################################################# III ### Clinical----
@@ -256,7 +258,9 @@ write_rds(clinical, "clinical.rds")
 
 ################################################################################################# IV ### Bind df----
 radiomics <- full_join(features, clinical, by = "mrn") %>% 
-  filter(!is.na(lesionid))
+  filter(!is.na(lesionid)) %>% 
+  left_join(., features %>% 
+              select(mrn, contrastenhancementyn))
 write_rds(radiomics, "radiomics.rds")
 
 
