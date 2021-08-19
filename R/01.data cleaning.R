@@ -43,9 +43,9 @@ capwords <- function(s, strict = FALSE) {
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
 features <-
   read_csv(paste0(path, "/data/analysis dataset/Clinical_normradiomics_08182021.csv")) %>% 
+  drop_na(lesionid) %>% 
   filter(isbiggesttumor == 1) %>%
-  select(mrn, contrastenhancementyn, lesionid, matches("^f[0-9]")) %>% 
-  drop_na(lesionid)
+  select(mrn, contrastenhancementyn, lesionid, matches("^f[0-9]"))
 contrast_info <- features %>% 
   select(mrn, contrastenhancementyn)
   
@@ -257,10 +257,12 @@ clinical <- clinical_var(data = clinical)
 write_rds(clinical, "clinical.rds")
 
 ################################################################################################# IV ### Bind df----
-radiomics <- full_join(features, clinical, by = "mrn") %>% 
-  filter(!is.na(lesionid)) %>% 
-  left_join(., features %>% 
-              select(mrn, contrastenhancementyn))
+radiomics <- left_join(features %>% 
+                         select(mrn, contrastenhancementyn, 
+                                (order(colnames(.)))) ,
+                       clinical,
+                       by = "mrn") %>% 
+  filter(!is.na(has_the_patient_recurred))
 write_rds(radiomics, "radiomics.rds")
 
 
