@@ -1,5 +1,5 @@
 ---
-title: "modeling"
+title: "modeling outcome with radiomic features"
 author: "Christelle Colin-Leitzinger"
 date: '`r Sys.Date()`'
 output: 
@@ -51,18 +51,22 @@ div.blue { background-color:#FF9966; border-radius: 5px; padding: 20px; font-siz
 ```{r library}
 library(tidyverse)
 library(tidymodels)
-# library(broom.mixed) # for converting bayesian models to tidy tibbles
 # library(dotwhisker)  # for visualizing regression results
 library(themis)
 library(gtsummary)
 library(ggcorrplot)
+library(survival)
 ```
 
 
 ```{r load}
 clinical <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/clinical.rds") %>% 
-  select(mrn, has_the_patient_recurred, rec_event, recurrence_time, os_event, os_time,
-         age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type, raceeth)
+  select(mrn, 
+         has_the_patient_recurred, vital_new, 
+         rec_event, recurrence_time, os_event, os_time,
+         age_at_diagnosis, tnm_cs_mixed_group_stage, 
+         treatment_type, debulking_status,
+         raceeth)
 
 concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance.rds") %>% 
   filter(value_CCC >= 0.95) %>% 
@@ -293,73 +297,35 @@ rec_data %>% select(matches("^f[0-9]"), has_the_patient_recurred) %>%
 
 ## HR of recurrence
 ```{r}
-rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
-  select(1:20, rec_event, recurrence_time) %>% 
-  tbl_uvregression(method = survival::coxph, 
-                   y = (Surv(time = rec_data$recurrence_time, 
-                             event = rec_data$rec_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-
-rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
-  select(21:40, rec_event, recurrence_time) %>% 
-  tbl_uvregression(method = survival::coxph, 
-                   y = (Surv(time = rec_data$recurrence_time, 
-                             event = rec_data$rec_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
-  select(41:60, rec_event, recurrence_time) %>% 
-  tbl_uvregression(method = survival::coxph, 
-                   y = (Surv(time = rec_data$recurrence_time, 
-                             event = rec_data$rec_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
-  select(60:ncol(.)) %>% 
-  tbl_uvregression(method = survival::coxph, 
-                   y = (Surv(time = rec_data$recurrence_time, 
-                             event = rec_data$rec_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-```
-
-## HR of death
-```{r}
-rec_data <- mldata %>% 
-  left_join(., clinical %>% 
-  select(mrn, os_event, os_time), 
-  by = "mrn")
-
-rec_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
-  select(1:20, os_event, os_time) %>% 
-  tbl_uvregression(method = survival::coxph, 
-                   y = (Surv(time = rec_data$os_time, 
-                             event = rec_data$os_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-
-rec_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
-  select(21:40, os_event, os_time) %>% 
-  tbl_uvregression(method = survival::coxph, 
-                   y = (Surv(time = rec_data$os_time, 
-                             event = rec_data$os_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-rec_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
-  select(41:60, os_event, os_time) %>% 
-  tbl_uvregression(method = survival::coxph, 
-                   y = (Surv(time = rec_data$os_time, 
-                             event = rec_data$os_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-rec_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
-  select(60:ncol(.)) %>% 
-  tbl_uvregression(method = survival::coxph, 
-                   y = (Surv(time = rec_data$os_time, 
-                             event = rec_data$os_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
+# rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
+#   select(1:20, rec_event, recurrence_time) %>% 
+#   tbl_uvregression(method = survival::coxph, 
+#                    y = (Surv(time = rec_data$recurrence_time, 
+#                              event = rec_data$rec_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
+# 
+# rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
+#   select(21:40, rec_event, recurrence_time) %>% 
+#   tbl_uvregression(method = survival::coxph, 
+#                    y = (Surv(time = rec_data$recurrence_time, 
+#                              event = rec_data$rec_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
+# rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
+#   select(41:60, rec_event, recurrence_time) %>% 
+#   tbl_uvregression(method = survival::coxph, 
+#                    y = (Surv(time = rec_data$recurrence_time, 
+#                              event = rec_data$rec_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
+# rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
+#   select(60:ncol(.)) %>% 
+#   tbl_uvregression(method = survival::coxph, 
+#                    y = (Surv(time = rec_data$recurrence_time, 
+#                              event = rec_data$rec_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
 ```
 
 
@@ -471,32 +437,47 @@ tree_tune <- tree_workflow %>%
     grid = tree_grid,
     metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)
   )
+# Explore tuning
+autoplot(tree_tune) + theme_light()
 
 cart_spec <-
    decision_tree(
-  #    cost_complexity = 1e-10
-  # tree_depth = 10
-  # min_n = 27
+     cost_complexity = 1e-10,
+  tree_depth = 10,
+  min_n = 40
    ) %>%
    set_engine("rpart") %>%
    set_mode("classification")
 
+set.seed(789)
 cart_fit <- 
    cart_spec %>%
    fit(has_the_patient_recurred ~ .-mrn-contrastenhancementyn, data = train_data)
 cart_fit <- repair_call(cart_fit, data = train_data)
 
-# Explore
-
-autoplot(tree_tune) + theme_light()
-
+# tree_tune %>% 
+#   collect_metrics() %>% 
+#   filter(.metric == "accuracy" | .metric == "roc_auc") %>% 
+#   filter(min_n == 40 & tree_depth == 10) %>% 
+#   select(mean, cost_complexity,tree_depth, .metric) %>% 
+#   # pivot_longer(cost_complexity:tree_depth,
+#   #              values_to = "value",
+#   #              names_to = "param") %>% 
+#   ggplot(aes(cost_complexity, mean)) +
+#   geom_point(show.legend = FALSE) +
+#   # facet_wrap( . ~ param, scales = "free_x") %>% 
+#   facet_grid( . ~ .metric)
+set.seed(789)
 final_tree <- tree_workflow %>% 
-  finalize_workflow(select_best(tree_tune, "roc_auc"))
+  finalize_workflow(select_best(tree_tune, "accuracy"))
 final_tree
 
 tree_final_fit <- fit(final_tree, data = train_data)
 tree_final_fit
+```
 
+
+```{r plot decision_tree, fig.width=12}
 library(rpart.plot)
 tree_final_fit %>%
   extract_fit_engine() %>%
@@ -565,36 +546,36 @@ autoplot(xgboost_tune)
 # mtry is the number of predictor randomly selected -> needs to be 
 # mim_n is the minimal node size -> needs to be small
 
-xgboost_tune %>% 
-  collect_metrics() %>% 
-  filter(.metric == "accuracy") %>% 
-  select(mean, trees:sample_size) %>% 
-  pivot_longer(trees:sample_size,
-               values_to = "value",
-               names_to = "param") %>% 
-  ggplot(aes(value, mean, color = param)) +
-  geom_point(show.legend = FALSE) +
-  facet_wrap( . ~ param, scales = "free_x")
-
-xgboost_tune %>% 
-  collect_metrics() %>% 
-  filter(.metric == "roc_auc") %>% 
-  select(mean, trees:sample_size) %>% 
-  pivot_longer(trees:sample_size,
-               values_to = "value",
-               names_to = "param") %>% 
-  ggplot(aes(value, mean, color = param)) +
-  geom_point(show.legend = FALSE) +
-  facet_wrap( . ~ param, scales = "free_x")
+# xgboost_tune %>% 
+#   collect_metrics() %>% 
+#   filter(.metric == "accuracy") %>% 
+#   select(mean, trees:sample_size) %>% 
+#   pivot_longer(trees:sample_size,
+#                values_to = "value",
+#                names_to = "param") %>% 
+#   ggplot(aes(value, mean, color = param)) +
+#   geom_point(show.legend = FALSE) +
+#   facet_wrap( . ~ param, scales = "free_x")
+# 
+# xgboost_tune %>% 
+#   collect_metrics() %>% 
+#   filter(.metric == "roc_auc") %>% 
+#   select(mean, trees:sample_size) %>% 
+#   pivot_longer(trees:sample_size,
+#                values_to = "value",
+#                names_to = "param") %>% 
+#   ggplot(aes(value, mean, color = param)) +
+#   geom_point(show.legend = FALSE) +
+#   facet_wrap( . ~ param, scales = "free_x")
 
 final_xgboost <- xgboost_workflow %>% 
-  finalize_workflow(select_best(xgboost_tune, "roc_auc"))
+  finalize_workflow(select_best(xgboost_tune, "roc_auc")) #roc_auc
 final_xgboost
 ```
 
-# RAMDOM FOREST
+# RANDOM FOREST
 ```{r rand_forest}
-############################################################################################### RAMDOM FOREST ----
+############################################################################################### Random FOREST ----
 set.seed(789)
 # Model specification
 ranger_spec <- rand_forest(
@@ -632,20 +613,20 @@ ranger_tune <-
 ############################################################################### II ### Explore Tuning Results ----
 
 # Visualize tuned parameters
-# autoplot(ranger_tune)
+autoplot(ranger_tune)
 # mtry is the number of predictor randomly selected -> needs to be 
 # mim_n is the minimal node size -> needs to be small
 
-ranger_tune %>% 
-  collect_metrics() %>% 
-  filter(.metric == "roc_auc") %>% 
-  select(mean, min_n, mtry) %>% 
-  pivot_longer(min_n:mtry,
-               values_to = "value",
-               names_to = "param") %>% 
-  ggplot(aes(value, mean, color = param)) +
-  geom_point(show.legend = FALSE) +
-  facet_wrap( . ~ param, scales = "free_x")
+# ranger_tune %>% 
+#   collect_metrics() %>% 
+#   filter(.metric == "roc_auc") %>% 
+#   select(mean, min_n, mtry) %>% 
+#   pivot_longer(min_n:mtry,
+#                values_to = "value",
+#                names_to = "param") %>% 
+#   ggplot(aes(value, mean, color = param)) +
+#   geom_point(show.legend = FALSE) +
+#   facet_wrap( . ~ param, scales = "free_x")
 
 
 # # Tune more?
@@ -681,7 +662,7 @@ ranger_tune %>%
 #   finalize_model(select_best(ranger_tune, "accuracy"))
 
 final_rf <- ranger_workflow %>% 
-  finalize_workflow(select_best(ranger_tune, "accuracy"))
+  finalize_workflow(select_best(ranger_tune, "accuracy"))# acc
 final_rf
 ```
 
@@ -759,11 +740,41 @@ autoplot(glmnet_tune)
 #   finalize_model(select_best(glmnet_tune, "roc_auc"))
 
 final_glmnet <- glmnet_workflow %>% 
-  finalize_workflow(select_best(glmnet_tune, "roc_auc"))
+  finalize_workflow(select_best(glmnet_tune, "roc_auc")) #roc_auc
 final_glmnet
+```
+
+# KKNN
+
+```{r}
+kknn_spec <- 
+  nearest_neighbor(neighbors = tune(), weight_func = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("kknn") 
+
+kknn_workflow <- 
+  workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(kknn_spec) 
+
+library(kknn)
+set.seed(789)
+kknn_tune <-
+  tune_grid(kknn_workflow, 
+            resamples = mldata_folds, 20)
+
+autoplot(kknn_tune)
+
+final_kknn <- kknn_workflow %>% 
+  finalize_workflow(select_best(kknn_tune, "accuracy"))# acc
+final_kknn
+```
 
 
+```{r Performance Metrics}
 ################################################################### Calculate Performance Metrics with tuned model----
+set.seed(789)
+
 tree_results <- final_tree %>% 
   fit_resamples(
     resamples = mldata_folds,
@@ -771,6 +782,7 @@ tree_results <- final_tree %>%
     control = control_resamples(save_pred = TRUE)
   )
 
+set.seed(789)
 xgboost_results <- final_xgboost %>% 
   fit_resamples(
     resamples = mldata_folds,
@@ -778,6 +790,7 @@ xgboost_results <- final_xgboost %>%
     control = control_resamples(save_pred = TRUE)
   )
 
+set.seed(789)
 rf_results <- final_rf %>% 
   fit_resamples( # is not doing any tuning, measuring performance on cross validation data
     resamples = mldata_folds,
@@ -785,7 +798,16 @@ rf_results <- final_rf %>%
     control = control_resamples(save_pred = TRUE, verbose = TRUE)
   )
 
+set.seed(789)
 glmnet_results <- final_glmnet %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
+  )
+
+set.seed(789)
+kknn_results <- final_kknn %>% 
   fit_resamples(
     resamples = mldata_folds,
     metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
@@ -798,106 +820,34 @@ glmnet_results <- final_glmnet %>%
 
 # EVALUATE MODELS
 ```{r evaluate models}
-############################################################################################### EVALUATE MODELS ----
 # Explore Performance Metrics
-collect_metrics(xgboost_results)
-collect_metrics(tree_results)
-collect_metrics(rf_results)
-collect_metrics(glmnet_results)
+# collect_metrics(xgboost_results)
+# collect_metrics(tree_results)
+# collect_metrics(rf_results)
+# collect_metrics(glmnet_results)
 # Accuracy is llow
 # Sensitivity has 50% chance finding the minority class pop
 
-
-rf_results %>% # Compare both models
-  collect_metrics() %>% 
-  select(".metric", rf_mean = mean, rf_sd = std_err) %>% 
-  full_join(., glmnet_results %>% 
-              collect_metrics() %>% 
-              select(".metric", glmet_mean = mean, glmet_sd = std_err)
-            , by = ".metric") %>% 
-  full_join(., xgboost_results %>% 
-              collect_metrics() %>% 
-              select(".metric", xgboost_mean = mean, xgboost_sd = std_err)
-            , by = ".metric") %>% 
-  full_join(., tree_results %>% 
-              collect_metrics() %>% 
-              select(".metric", tree_mean = mean, tree_sd = std_err)
-            , by = ".metric")
-
-rf_results %>% # Compare both models
-  collect_metrics() %>% 
-  mutate(model = "rf") %>% 
-  # select(".metric", rf_mean = mean, rf_sd = std_err) %>% 
-  bind_rows(glmnet_results %>% 
-              collect_metrics() %>% 
-              mutate(model = "glmet")) %>% 
-  # select(glmet_mean = mean, glmet_sd = std_err)) %>% 
-  bind_rows(xgboost_results %>% 
-              collect_metrics() %>% 
-              mutate(model = "xgboost")) %>% 
-  # select(xgboost_mean = mean, xgboost_sd = std_err)) %>% 
-  bind_rows(tree_results %>% 
-              collect_metrics() %>% 
-              mutate(model = "tree")) %>% 
-  # select(tree_mean = mean, tree_sd = std_err)) %>% 
-  ggplot(aes(x= .metric, y=mean, fill = model))+
-  geom_bar(stat = "identity",
-           position = position_dodge())+
-  geom_errorbar(aes(x = .metric,
-                    ymin = mean - std_err,
-                    ymax = mean + std_err),
-                width = 0.2, alpha = 0.5,
-                position=position_dodge(width=0.9))+
-  theme_minimal()+
-  scale_fill_viridis_d()
-
-xgboost_results %>% 
-  conf_mat_resampled()
-tree_results %>% 
-  conf_mat_resampled()
-rf_results %>% 
-  conf_mat_resampled()
-glmnet_results %>% 
-  conf_mat_resampled()
-
-# Visualization
-xgboost_results %>% # is the saved predictions
-  collect_predictions() %>% 
-  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
-  autoplot()
-tree_results %>% 
-  collect_predictions() %>% 
-  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
-  autoplot()
-rf_results %>% # is the saved predictions
-  collect_predictions() %>% 
-  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
-  autoplot()
-glmnet_results %>% 
-  collect_predictions() %>% 
-  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
-  autoplot()
-
-xgboost_results %>% 
-  collect_predictions() %>% 
-  group_by(id) %>% 
-  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
-  autoplot()
-tree_results %>% 
-  collect_predictions() %>% 
-  group_by(id) %>% 
-  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
-  autoplot()
-rf_results %>% 
-  collect_predictions() %>% 
-  group_by(id) %>% 
-  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
-  autoplot()
-glmnet_results %>% 
-  collect_predictions() %>% 
-  group_by(id) %>% 
-  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
-  autoplot()
+# xgboost_results %>% 
+#   collect_predictions() %>% 
+#   group_by(id) %>% 
+#   roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+#   autoplot()
+# tree_results %>% 
+#   collect_predictions() %>% 
+#   group_by(id) %>% 
+#   roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+#   autoplot()
+# rf_results %>% 
+#   collect_predictions() %>% 
+#   group_by(id) %>% 
+#   roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+#   autoplot()
+# glmnet_results %>% 
+#   collect_predictions() %>% 
+#   group_by(id) %>% 
+#   roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+#   autoplot()
 
 rf_results %>% # Compare both models
   collect_predictions() %>% 
@@ -915,25 +865,106 @@ rf_results %>% # Compare both models
   roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
   autoplot()
 
+rf_results %>% # Compare both models
+  collect_metrics() %>% 
+  select(".metric", rf_mean = mean) %>% 
+  full_join(., glmnet_results %>% 
+              collect_metrics() %>% 
+              select(".metric", glmet_mean = mean)
+            , by = ".metric") %>% 
+  full_join(., xgboost_results %>% 
+              collect_metrics() %>% 
+              select(".metric", xgboost_mean = mean)
+            , by = ".metric") %>% 
+  full_join(., tree_results %>% 
+              collect_metrics() %>% 
+              select(".metric", tree_mean = mean)
+            , by = ".metric") %>% 
+  full_join(., kknn_results %>% 
+              collect_metrics() %>% 
+              select(".metric", kknn_mean = mean)
+            , by = ".metric")
 
+rf_results %>% # Compare both models
+  collect_metrics() %>% 
+  mutate(model = "rf") %>% 
+  bind_rows(glmnet_results %>% 
+              collect_metrics() %>% 
+              mutate(model = "glmet")) %>% 
+  bind_rows(xgboost_results %>% 
+              collect_metrics() %>% 
+              mutate(model = "xgboost")) %>% 
+  bind_rows(tree_results %>% 
+              collect_metrics() %>% 
+              mutate(model = "tree")) %>% 
+  bind_rows(kknn_results %>% 
+              collect_metrics() %>% 
+              mutate(model = "kknn")) %>% 
+  
+  ggplot(aes(x= .metric, y=mean, fill = model))+
+  geom_bar(stat = "identity",
+           position = position_dodge())+
+  geom_errorbar(aes(x = .metric,
+                    ymin = mean - std_err,
+                    ymax = mean + std_err),
+                width = 0.2, alpha = 0.5,
+                position=position_dodge(width=0.9))+
+  theme_minimal()+
+  scale_fill_viridis_d(option = "A")
+```
+<br>
+<br>
+
+**Random forest and logistic regression are investigated deeper due to their respectivive higher accuracy and specificity results**
+
+<br>
+
+```{r evaluate models2}
+# xgboost_results %>% 
+#   conf_mat_resampled()
+# tree_results %>% 
+#   conf_mat_resampled()
+rf_results %>% 
+  conf_mat_resampled()
+glmnet_results %>% 
+  conf_mat_resampled()
+
+# Visualization
+# xgboost_results %>% # is the saved predictions
+#   collect_predictions() %>% 
+#   conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+#   autoplot()
+# tree_results %>% 
+#   collect_predictions() %>% 
+#   conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+#   autoplot()
+rf_results %>% # is the saved predictions
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()+
+  ggtitle("Random forest")
+glmnet_results %>% 
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()+
+  ggtitle("Logistic Regression")
 
 # Calculate prediction after the fact
-xgboost_results %>% collect_predictions() %>% 
-  ppv(truth = has_the_patient_recurred, estimate = .pred_class) # do histog
-tree_results %>% collect_predictions() %>% 
-  ppv(truth = has_the_patient_recurred, estimate = .pred_class)
-rf_results %>% collect_predictions() %>% 
-  ppv(truth = has_the_patient_recurred, estimate = .pred_class)
-glmnet_results %>% collect_predictions() %>% 
-  ppv(truth = has_the_patient_recurred, estimate = .pred_class)
+# xgboost_results %>% collect_predictions() %>% 
+#   ppv(truth = has_the_patient_recurred, estimate = .pred_class) # do histog
+# tree_results %>% collect_predictions() %>% 
+#   ppv(truth = has_the_patient_recurred, estimate = .pred_class)
+# rf_results %>% collect_predictions() %>% 
+#   ppv(truth = has_the_patient_recurred, estimate = .pred_class)
+# glmnet_results %>% collect_predictions() %>% 
+#   ppv(truth = has_the_patient_recurred, estimate = .pred_class)
 ```
 
 # features importance
 ```{r vip}
-############################################################################################### Step Explore of features importance ----
 library(vip) 
 set.seed(789)
-###################################### xgboost----
+###################################### xgboost
 # # Need to train the model one more time but without tuning to go faster
 # importance_spec <- xgboost_spec %>% 
 #   finalize_model(select_best(glmnet_tune, "roc_auc")) %>% 
@@ -950,6 +981,26 @@ set.seed(789)
 #       num_features = 20
 #   )
 
+###################################### Ranger----
+# Need to train the model one more time but without tuning to go faster
+importance_spec <- ranger_spec %>% 
+  finalize_model(select_best(ranger_tune, "roc_auc")) %>% 
+  set_engine("ranger", importance = "permutation") # permutation based importance
+
+# represents the mean decrease in node impurity (and not the mean decrease in accuracy)
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  extract_fit_parsnip() %>% 
+  vip(aesthetics = list(alpha = 0.5, fill = "midnightblue"),
+      # geom = "point",
+      num_features = 20
+  ) +
+  theme_minimal() + 
+  ggtitle("Varaiable importance from Random forest model")
+
+
 ###################################### glmnet----
 # Need to train the model one more time but without tuning to go faster
 importance_spec <- glmnet_spec %>% 
@@ -965,34 +1016,18 @@ workflow() %>%
   vip(aesthetics = list(alpha = 0.5, fill = "midnightblue"),
       # geom = "point",
       num_features = 20
-  ) + ggtitle("Varaiable importance from logistic regression model")
-
-
-###################################### Ranger----
-
-# Need to train the model one more time but without tuning to go faster
-importance_spec <- ranger_spec %>% 
-  finalize_model(select_best(ranger_tune, "roc_auc")) %>% 
-  set_engine("ranger", importance = "permutation") # permutation based importance
-
-# represents the mean decrease in node impurity (and not the mean decrease in accuracy)
-workflow() %>% 
-  add_recipe(mldata_recipe) %>% 
-  add_model(importance_spec) %>% 
-  fit(train_data) %>% 
-  extract_fit_parsnip() %>% 
-  vip(aesthetics = list(alpha = 0.5, fill = "midnightblue"),
-      # geom = "point",
-      num_features = 20
-  ) + ggtitle("Varaiable importance from ramdom forest model")
+  ) +
+  theme_minimal() +
+  ggtitle("Varaiable importance from logistic regression model")
 ```
 
 # Fit on testing using RF
-
+## Compare testing performance vs training performance
 ```{r fit on testing}
 ############################################################################################### AT LAST
 # Step finalize Fit : fitting to the whole training and evaluating on the testing data
 # With the model of our choice
+set.seed(789)
 final_fit <- final_rf %>% 
   last_fit(data_split)
 
@@ -1017,39 +1052,74 @@ collect_metrics(final_fit) %>%
                     ymin = mean - std_err,
                     ymax = mean + std_err),
                 width = 0.2, alpha = 0.5,
-                position=position_dodge(width=0.9))
-collect_metrics(final_fit) %>% 
-  mutate(set = "testing") %>% 
-  rename(mean = .estimate) %>% 
-  bind_rows(collect_metrics(rf_results) %>% 
-              mutate(set = "training")) %>% 
-  filter(str_detect(.metric, "accuracy|roc_auc")) %>% 
-  ggplot(aes(x= .metric, y=mean, color = set))+
-  geom_point() + 
-  geom_errorbar(aes(xmin = mean - std_err,
-                    xmax = mean + std_err),
-                width = 0.2, alpha = 0.5)
+                position=position_dodge(width=0.9)) +
+  theme_minimal()
 
+# collect_metrics(final_fit) %>% 
+#   mutate(set = "testing") %>% 
+#   rename(mean = .estimate) %>% 
+#   bind_rows(collect_metrics(rf_results) %>% 
+#               mutate(set = "training")) %>% 
+#   filter(str_detect(.metric, "accuracy|roc_auc")) %>% 
+#   ggplot(aes(x= .metric, y=mean, color = set))+
+#   geom_point(position = position_dodge(width = 0.9)) + 
+#   geom_errorbar(aes(x = .metric,
+#                     ymin = mean - std_err,
+#                     ymax = mean + std_err),
+#                 width = 0.2, alpha = 0.5,
+#                 position=position_dodge(width=0.9))
+```
+
+## Predictions on testing set
+```{r fit on testing}
 final_fit %>% 
   collect_predictions() %>% 
   conf_mat(truth = has_the_patient_recurred, estimate = .pred_class)
 final_fit %>% 
   collect_predictions() %>% 
   conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
-  autoplot()
+  autoplot() +
+  ggtitle("random forest model on testing data")
 ```
+<br>
 
-# Fit on testing using GLMET
+# Fit on testing using GLMNET
+## Compare testing performance vs training performance
 ```{r}
 # If choose glmnet, can see estimate on the testing
+set.seed(789)
 final_fit_sec <- final_glmnet %>% 
   last_fit(data_split)
 
+collect_metrics(final_fit)
+# Compare to the training previous number
+collect_metrics(glmnet_results)
+
+collect_metrics(final_fit) %>% 
+  mutate(set = "testing") %>% 
+  rename(mean = .estimate) %>% 
+  bind_rows(collect_metrics(glmnet_results) %>% 
+              mutate(set = "training")) %>% 
+  filter(str_detect(.metric, "accuracy|roc_auc")) %>% 
+  ggplot(aes(x= .metric, y=mean, fill = set))+
+  geom_bar(stat = "identity",
+           position = position_dodge()) + 
+  geom_errorbar(aes(x = .metric,
+                    ymin = mean - std_err,
+                    ymax = mean + std_err),
+                width = 0.2, alpha = 0.5,
+                position=position_dodge(width=0.9)) +
+  theme_minimal()
+```
+
+## Predictions on testing set
+```{r, fig.height=15, fig.width=12}
 final_fit_sec %>%
   pull(.workflow) %>% 
   pluck(1) %>% 
   tidy(exponentiate = TRUE) %>% 
-  arrange(desc(abs(estimate))) # %>%
+  arrange(desc(abs(estimate))) %>%
+  filter(abs(estimate) >0)
 # kableExtra::kable(digits = 3)
 
 final_fit_sec %>% # WARNING it uses the scaled data
@@ -1059,21 +1129,15 @@ final_fit_sec %>% # WARNING it uses the scaled data
   filter(term != "(Intercept)") %>% 
   arrange(desc(abs(estimate))) %>% 
   filter(abs(estimate) >0) %>% 
-  ggplot(aes(estimate, fct_reorder(term, desc(estimate))))+
+  ggplot(aes(estimate, fct_reorder(term, desc(estimate)), color = estimate > 0))+
   geom_vline(xintercept = 0, color = "lightgrey", lty = 2, size = 1.2) +
-  # geom_errorbar(aes(xmin = estimate - std.error,
-  #                   xmax = estimate + std.error),
-  #               width = 0.2, alpha = 0.5)+
   geom_point() + 
-  theme_classic()
-
-
-collect_metrics(final_fit)
-# Compare to the training previous number
-collect_metrics(glmnet_results)
+  scale_color_discrete(name = "Feature Effect \non outcome", labels = c("Deleterious", "Beneficial")) +
+  theme_minimal()+
+  ggtitle("Meaningful Parameter Estimate Coefficients using logistic regression model")
 ```
 
-## Compare both
+## Compare both model performance on testing set
 
 ```{r}
 final_fit_sec %>% collect_predictions() %>% 
@@ -1087,16 +1151,45 @@ final_fit_sec %>% collect_predictions() %>%
   pivot_longer(cols = -set, names_to = "status", values_to = "probability") %>% 
   ggplot(aes(x= set, y=probability, fill = status))+
   geom_bar(stat = "identity",
-           position = position_dodge())
+           position = position_dodge()) +
+  theme_minimal()
+
+
+# final_fit_sec %>% collect_predictions() %>% 
+#   mutate(set = "glmnet") %>% 
+#   bind_rows(final_fit %>% collect_predictions() %>% 
+#               mutate(set = "rf")) %>% 
+#   mutate(is_predicton_correct = case_when(
+#     has_the_patient_recurred == .pred_class     ~ "Cool!",
+#     TRUE                                        ~ ":("
+#   )) %>% 
+#   group_by(set, is_predicton_correct) %>% 
+#   summarize(recurrence = mean(.pred_Recurrence),
+#             no_recurrence = mean(`.pred_No Recurrence`)) %>% 
+#   ungroup() %>% 
+#   pivot_longer(cols = -c(set, is_predicton_correct), names_to = "status", values_to = "probability") %>% 
+#   ggplot(aes(x= is_predicton_correct, y=probability, fill = status))+
+#   geom_bar(stat = "identity",
+#            position = position_dodge()) + 
+#   facet_wrap(. ~ set)
+
+
 
 ```
 
 
 # Outcome Analysis
 
-# logistic regression
+<!-- # logistic regression -->
 ```{r}
-# model <- glm(recurremce ~ treatment_type + preDx_comorbidities + age_at_Dx + Race + tnm_stage + debulking_status, data = mldata, family = binomial)
+rec_data <- mldata %>%
+  inner_join(., clinical %>%
+  select(mrn, rec_event, recurrence_time,
+         treatment_type, age_at_diagnosis, raceeth, tnm_cs_mixed_group_stage, debulking_status),
+  by = "mrn")
+# 
+# model <- glm(has_the_patient_recurred ~ treatment_type + age_at_diagnosis + raceeth + tnm_cs_mixed_group_stage + debulking_status, 
+#              data = rec_data, family = binomial)
 # tbl1 <- tbl_regression(model)
 # tbl2 <- tbl_regression(model, exponentiate = TRUE)
 # tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Estimate**", "**Exp**"))
@@ -1104,26 +1197,22 @@ final_fit_sec %>% collect_predictions() %>%
 
 # HR
 ```{r}
-# rec_data <- mldata %>% 
-#   left_join(., clinical %>% 
-#   select(mrn, rec_event, recurrence_time,
-#          raceeth, age_at_diagnosis, grade_differentiation, treatment_type), 
-#   by = "mrn")
-# 
-# tbl1 <- rec_data %>% select(rec_event, recurrence_time,
-#                             raceeth, age_at_diagnosis, grade_differentiation, treatment_type,
-#                             f144glszm_zone_) %>%
-#   tbl_uvregression(method = survival::coxph, 
-#                    y = (Surv(time = rec_data$recurrence_time, 
-#                              event = rec_data$rec_event)),
-#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-#   bold_labels() %>% italicize_levels()
-# tbl2 <- coxph(Surv(time = rec_data$recurrence_time, 
-#              event = rec_data$rec_event) ~ raceeth + age_at_diagnosis + grade_differentiation + treatment_type + f144glszm_zone_, data =  rec_data) %>%
-#   tbl_regression(exponentiate = TRUE) %>% bold_p(t = .05)
-# 
-# tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Univariable**", "**Multivariable**"))
-  
+tbl1 <- rec_data %>% select(rec_event, recurrence_time,
+                            raceeth, age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type,
+                            f10statistical_, f81com_y_pxl, f9statistical_9,
+                            f102avgcoocurre, f65flatness, f83com_x_mm, f87weighted_com) %>%
+  tbl_uvregression(method = survival::coxph,
+                   y = (Surv(time = rec_data$recurrence_time,
+                             event = rec_data$rec_event)),
+                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+  bold_labels() %>% italicize_levels()
+
+tbl2 <- 
+  coxph(Surv(time = rec_data$recurrence_time,
+             event = rec_data$rec_event) ~ raceeth + age_at_diagnosis + tnm_cs_mixed_group_stage + treatment_type + f10statistical_ + f81com_y_pxl + f9statistical_9 + f102avgcoocurre + f65flatness + f83com_x_mm + f87weighted_com, data =  rec_data) %>%
+  tbl_regression(exponentiate = TRUE) %>% bold_p(t = .05)
+
+tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Univariable**", "**Multivariable**"))
 ```
 
 
