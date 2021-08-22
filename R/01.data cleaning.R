@@ -106,7 +106,10 @@ clinical <- clinical %>%
       c("Other", "Unknown") |
       ethnicity == "Unknown"             ~ "Other/Unknown"
   )) %>% 
-  
+  mutate(raceeth = factor(raceeth, 
+                          levels = c("White Non-Hispanic", "Black Non-Hispanic", 
+                                     "Hispanic","Other/Unknown")) ) %>% 
+  mutate(tnm_cs_mixed_group_stage = factor(tnm_cs_mixed_group_stage)) %>% 
   mutate(preDx_hypertension = case_when(
     str_detect(hypertension, "pre|Pre|both")                      ~ "Yes",
     TRUE                                                          ~ "No"
@@ -213,7 +216,7 @@ clinical_var <- function(data) {
     
     mutate(recurrence_time = round(interval(start = first_treatment_date, end = rec_event_date)/
                                                   duration(n=1, units = "months"), 2)) %>% 
-    mutate(rec_event = ifelse((has_the_patient_recurred == "no"), 0, 1)) %>%
+    mutate(rec_event = ifelse((has_the_patient_recurred == "No"), 0, 1)) %>%
     mutate(has_the_patient_recurred = case_when(
       str_detect(has_the_patient_recurred, "Yes|yes")          ~ "Recurrence",
       str_detect(has_the_patient_recurred, "No|no")           ~ "No Recurrence"
