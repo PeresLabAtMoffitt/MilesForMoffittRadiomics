@@ -153,7 +153,8 @@ mldata %>% select(contrastenhancementyn) %>%
 mldata %>%
   # full_join(., clinical_ml) %>% 
   select(age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type, raceeth) %>% 
-  tbl_summary()
+  tbl_summary(by = treatment_type) %>% 
+  bold_labels() %>% add_p() %>% bold_p(t = 0.05)
 ```
 </div>
 
@@ -186,7 +187,10 @@ p + scale_fill_viridis_c(
 ```{r}
 mldata %>% 
   select(has_the_patient_recurred) %>% 
-  tbl_summary(sort = list(everything() ~ "frequency"))
+  tbl_summary(by = treatment_type, 
+              sort = list(everything() ~ "frequency")
+              ) %>% 
+  bold_labels() %>% add_p() %>% bold_p(t = 0.05)
 ```
 </div>
 
@@ -319,10 +323,16 @@ ggcorrplot(mat, hc.order = TRUE, method = "square",
 ### Features by outcome status
 ```{r}
 rec_data <- mldata %>%
-  left_join(., clinical_ml %>% select(mrn, rec_event, recurrence_time))
+  left_join(., clinical_ml %>% select(mrn, rec_event, recurrence_time, treatment_type))
 
 rec_data %>% select(matches("^f[0-9]"), has_the_patient_recurred) %>%
   tbl_summary(by = has_the_patient_recurred,
+              sort = list(everything() ~ "frequency"),
+              digits = list(everything() ~  2)) %>%
+  bold_labels() %>% add_p() %>% bold_p(t = .05)
+
+rec_data %>% select(matches("^f[0-9]"), treatment_type) %>%
+  tbl_summary(by = treatment_type,
               sort = list(everything() ~ "frequency"),
               digits = list(everything() ~  2)) %>%
   bold_labels() %>% add_p() %>% bold_p(t = .05)
