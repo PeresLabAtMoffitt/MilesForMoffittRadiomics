@@ -60,15 +60,27 @@ library(DescTools)
 ***
 
 ```{r load test-retest}
-first_seg <- read_csv("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_TestRetest_first segmentation.csv") %>%
+path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
+
+first_seg <- read_csv(paste0(path,
+  "/data/Test retest stable features/Ovarian_Radiomics_Features_TestRetest_first segmentation.csv")) %>%
   `colnames<-`(str_remove(colnames(.), " _first_segmentation") %>% tolower() %>% gsub(":", "_",.)) %>% 
   mutate(date = as.Date(date, format = "%m/%d/%y"))
 
-second_seg <- read_csv("/Users/colinccm/Documents/GitHub/Peres/data/Radiomics/Ovarian_Radiomics_Features_TestRetest_second segmentation.csv") %>%
+second_seg <- read_csv(paste0(path,
+  "/data/Test retest stable features/Ovarian_Radiomics_Features_TestRetest_second segmentation.csv")) %>%
   `colnames<-`(str_remove(colnames(.), " _second_seg") %>% tolower() %>% gsub(":", "_",.)) %>% 
-  mutate(date = as.Date(as.character(date), format = "%Y%m%d"))
+  mutate(date = as.Date(as.character(date), format = "%Y%m%d")) %>% 
+  mutate(f133_glszm_small_zone_emphasis = as.numeric(f133_glszm_small_zone_emphasis)) %>% 
+  mutate(f138_glszm_small_zone_high_grey_level_emphasis = as.numeric(f138_glszm_small_zone_high_grey_level_emphasis))
+  
+# Remove image that are not contrast enhanced
+ids_to_remove <- read_csv(paste0(path,
+  "/data/Test retest stable features/List of ids to remove from test retest.csv"))
+ids_to_remove <- paste(ids_to_remove$ids_non_contrast_enhamced, collapse = "|")
 
 segmentation <- bind_rows(first_seg, second_seg) %>% 
+  filter(!str_detect(mrn, ids_to_remove)) %>% 
   mutate(seg = "segmentation0") %>% 
   unite(segmentationcohort, c(seg, segmentationcohort), sep = "") %>% 
   mutate(mrn = as.character(mrn)) %>% 
@@ -171,8 +183,6 @@ for(i in 1:length(colnames(segmentation))) {
 colnames(CCC_data) <- colnames(segmentation)[6:ncol(segmentation)]
 rm(CCC_df, CCC, i, rad)
 
-library(plotly)
-
 plot <- CCC_data %>% 
   pivot_longer(cols = everything()) %>% 
   mutate(CCC = "CCC") %>% 
@@ -199,7 +209,7 @@ CCC_data <- CCC_data %>%
 CCC_data
 
 path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics", "Christelle")
-write_csv(CCC_data %>% filter(value > 0.95), paste0(path, "/stable features/selected stable features at 95p.csv"))
+# write_csv(CCC_data %>% filter(value > 0.95), paste0(path, "/stable features/selected stable features at 95p.csv"))
 ```
 <br>
 
@@ -211,9 +221,9 @@ The following table is saved at
 smb://hlm/data/project/Peres_Research/Ovarian - Radiomics/Christelle/stable features/concordance CCC and ICC.csv
 ```{r concordance, rows.print=86}
 concordance <- full_join(CCC_data, ICC_data, by = "name", suffix = c("_CCC", "_ICC")) %>% arrange(desc(value_ICC)) %>% 
-  select(value_ICC, reliability_CCC, value_CCC, reliability_ICC, name)
+  select(value_ICC, reliability_ICC, value_CCC, reliability_CCC, name)
 concordance
-write_csv(concordance, paste0(path, "/stable features/concordance CCC and ICC.csv"))
+# write_csv(concordance, paste0(path, "/stable features/concordance CCC and ICC.csv"))
 ```
 
 # It comes to decide if we choose 0.95 or 0.9 as a limit.
