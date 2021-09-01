@@ -56,6 +56,7 @@ library(themis)
 library(gtsummary)
 library(gplots)
 library(ggcorrplot)
+library(survminer)
 library(survival)
 library(rpart.plot)
 library(rattle)
@@ -302,7 +303,8 @@ ggcorrplot(mat, hc.order = TRUE, method = "square",
 ```{r}
 rec_data <- mldata %>% 
   left_join(., clinical %>% 
-  select(mrn, rec_event, recurrence_time, treatment_type), 
+  select(mrn, rec_event, recurrence_time, treatment_type,
+         debulking_status), 
   by = "mrn")
 
 rec_data %>% select(matches("^f[0-9]"), has_the_patient_recurred) %>%
@@ -351,6 +353,36 @@ rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
   bold_labels() %>% italicize_levels()
 ```
 <br>
+
+# Ask by Lauren : Survival curve by debulking status
+
+```{r}
+mysurv <- Surv(rec_data$recurrence_time, event = rec_data$rec_event)
+myplot <- survfit(mysurv~debulking_status, data = rec_data)
+ggsurvplot(myplot, data = rec_data,
+           title = "Recurrence Analysis",
+           font.main = c(24, "bold", "black"),
+           font.x = c(20, "bold", "black"),
+           font.y = c(20, "bold", "black"),
+           font.legend = c(20, "bold", "black"),
+           font.tickslab = c(18, "bold", "black"),
+           size = 1.5,
+
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           # legend.labs = c("White Non-Hispanic", "Hispanic", "Black"),
+           # palette = c("#03051AFF", "blue", "red"),
+           pval = TRUE,
+           pval.coord = c(0, 0.1),
+           conf.int = FALSE,
+           # xlim = c(0, 400),
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(nrow = 4))
+```
+<br>
+
 
 ***
 
@@ -1366,7 +1398,7 @@ os_data %>% select(matches("^f[0-9]"), vital_new) %>%
 ```{r}
 os_data <- mldata %>%
   left_join(., clinical %>%
-  select(mrn, os_event, os_time),
+  select(mrn, os_event, os_time, debulking_status),
   by = "mrn")
 
 os_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
@@ -1400,6 +1432,36 @@ os_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
   bold_labels() %>% italicize_levels()
 ```
 <br>
+
+# Ask by Lauren : Survival curve by debulking status
+
+```{r}
+mysurv <- Surv(os_data$os_time, event = os_data$os_event)
+myplot <- survfit(mysurv~debulking_status, data = os_data)
+ggsurvplot(myplot, data = os_data,
+           title = "OS Analysis",
+           font.main = c(24, "bold", "black"),
+           font.x = c(20, "bold", "black"),
+           font.y = c(20, "bold", "black"),
+           font.legend = c(20, "bold", "black"),
+           font.tickslab = c(18, "bold", "black"),
+           size = 1.5,
+
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           # legend.labs = c("White Non-Hispanic", "Hispanic", "Black"),
+           # palette = c("#03051AFF", "blue", "red"),
+           pval = TRUE,
+           pval.coord = c(0, 0.1),
+           conf.int = FALSE,
+           # xlim = c(0, 400),
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(nrow = 4))
+```
+<br>
+
 
 ***
 

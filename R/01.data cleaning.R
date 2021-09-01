@@ -178,10 +178,10 @@ clinical <- clinical %>%
   # ))
 
   mutate(date_of_first_adjuvant_chemother = as.POSIXct(date_of_first_adjuvant_chemother, format = "%m/%d/%y")) %>% 
-  mutate(debulking_status = case_when(
-    debulking_status == "Incomplete Records"    ~ NA_character_,
-    TRUE                                        ~ debulking_status
-  )) %>% 
+  # mutate(debulking_status = case_when(
+  #   debulking_status == "Incomplete Records"    ~ NA_character_,
+  #   TRUE                                        ~ debulking_status
+  # )) %>% 
   # left_join(ID_linkage, ., by = "mrn") %>% 
   select(#-mrn, 
     -c(moffitt_patient, summary_of_rx_1st_course, summary_of_rx_1st_course_at_t, subject_number))
@@ -268,6 +268,7 @@ radiomics <- left_join(features %>%
   filter(!is.na(has_the_patient_recurred))
 write_rds(radiomics, "radiomics.rds")
 
+# End cleaning
 
 ################################################################################################# V ### New file---- Obsolete 
 
