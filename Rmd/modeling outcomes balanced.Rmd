@@ -75,7 +75,7 @@ clinical <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadi
          treatment_type, debulking_status,
          raceeth)
 
-# concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance.rds") %>% 
+# concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance1.rds") %>% 
 #   filter(value_CCC >= 0.95) %>% 
 #   select(name) %>% 
 #   mutate(stable_features = str_match(name, "([a-z][:digit:]*)_*")[,2])
@@ -329,34 +329,34 @@ rec_data %>% select(matches("^f[0-9]"), treatment_type) %>%
 ### HR of recurrence
 ```{r}
 rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
-  select(1:20, rec_event, recurrence_time) %>%
+  select(1:ncol(.), rec_event, recurrence_time) %>%
   tbl_uvregression(method = survival::coxph,
                    y = (Surv(time = rec_data$recurrence_time,
                              event = rec_data$rec_event)),
                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
   bold_labels() %>% italicize_levels()
 
-rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
-  select(21:40, rec_event, recurrence_time) %>%
-  tbl_uvregression(method = survival::coxph,
-                   y = (Surv(time = rec_data$recurrence_time,
-                             event = rec_data$rec_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
-  select(41:60, rec_event, recurrence_time) %>%
-  tbl_uvregression(method = survival::coxph,
-                   y = (Surv(time = rec_data$recurrence_time,
-                             event = rec_data$rec_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
-  select(60:ncol(.)) %>%
-  tbl_uvregression(method = survival::coxph,
-                   y = (Surv(time = rec_data$recurrence_time,
-                             event = rec_data$rec_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
+# rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
+#   select(21:40, rec_event, recurrence_time) %>%
+#   tbl_uvregression(method = survival::coxph,
+#                    y = (Surv(time = rec_data$recurrence_time,
+#                              event = rec_data$rec_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
+# rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
+#   select(41:60, rec_event, recurrence_time) %>%
+#   tbl_uvregression(method = survival::coxph,
+#                    y = (Surv(time = rec_data$recurrence_time,
+#                              event = rec_data$rec_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
+# rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
+#   select(60:ncol(.)) %>%
+#   tbl_uvregression(method = survival::coxph,
+#                    y = (Surv(time = rec_data$recurrence_time,
+#                              event = rec_data$rec_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
 ```
 <br>
 
@@ -1284,22 +1284,22 @@ rec_data <- mldata %>%
 
 ## HR
 ```{r}
-tbl1 <- rec_data %>% select(rec_event, recurrence_time,
-                            raceeth, age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type,
-                            f10statistical_, f81com_y_pxl, f9statistical_9,
-                            f102avgcoocurre, f65flatness, f83com_x_mm, f87weighted_com) %>%
-  tbl_uvregression(method = survival::coxph,
-                   y = (Surv(time = rec_data$recurrence_time,
-                             event = rec_data$rec_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-
-tbl2 <- 
-  coxph(Surv(time = rec_data$recurrence_time,
-             event = rec_data$rec_event) ~ raceeth + age_at_diagnosis + tnm_cs_mixed_group_stage + treatment_type + f10statistical_ + f81com_y_pxl + f9statistical_9 + f102avgcoocurre + f65flatness + f83com_x_mm + f87weighted_com, data =  rec_data) %>%
-  tbl_regression(exponentiate = TRUE) %>% bold_p(t = .05)
-
-tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Univariable**", "**Multivariable**"))
+# tbl1 <- rec_data %>% select(rec_event, recurrence_time,
+#                             raceeth, age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type,
+#                             f10statistical_, f81com_y_pxl, f9statistical_9,
+#                             f102avgcoocurre, f65flatness, f83com_x_mm, f87weighted_com) %>%
+#   tbl_uvregression(method = survival::coxph,
+#                    y = (Surv(time = rec_data$recurrence_time,
+#                              event = rec_data$rec_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
+# 
+# tbl2 <- 
+#   coxph(Surv(time = rec_data$recurrence_time,
+#              event = rec_data$rec_event) ~ raceeth + age_at_diagnosis + tnm_cs_mixed_group_stage + treatment_type + f10statistical_ + f81com_y_pxl + f9statistical_9 + f102avgcoocurre + f65flatness + f83com_x_mm + f87weighted_com, data =  rec_data) %>%
+#   tbl_regression(exponentiate = TRUE) %>% bold_p(t = .05)
+# 
+# tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Univariable**", "**Multivariable**"))
 ```
 <br>
 <br>
@@ -1408,34 +1408,34 @@ os_data <- mldata %>%
   by = "mrn")
 
 os_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
-  select(1:20, os_event, os_time) %>%
+  select(1:ncol(.), os_event, os_time) %>%
   tbl_uvregression(method = survival::coxph,
                    y = (Surv(time = os_data$os_time,
                              event = os_data$os_event)),
                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
   bold_labels() %>% italicize_levels()
 
-os_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
-  select(21:40, os_event, os_time) %>%
-  tbl_uvregression(method = survival::coxph,
-                   y = (Surv(time = os_data$os_time,
-                             event = os_data$os_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-os_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
-  select(41:60, os_event, os_time) %>%
-  tbl_uvregression(method = survival::coxph,
-                   y = (Surv(time = os_data$os_time,
-                             event = os_data$os_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-os_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
-  select(60:ncol(.)) %>%
-  tbl_uvregression(method = survival::coxph,
-                   y = (Surv(time = os_data$os_time,
-                             event = os_data$os_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
+# os_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
+#   select(21:40, os_event, os_time) %>%
+#   tbl_uvregression(method = survival::coxph,
+#                    y = (Surv(time = os_data$os_time,
+#                              event = os_data$os_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
+# os_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
+#   select(41:60, os_event, os_time) %>%
+#   tbl_uvregression(method = survival::coxph,
+#                    y = (Surv(time = os_data$os_time,
+#                              event = os_data$os_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
+# os_data %>% select(matches("^f[0-9]"), os_event, os_time) %>%
+#   select(60:ncol(.)) %>%
+#   tbl_uvregression(method = survival::coxph,
+#                    y = (Surv(time = os_data$os_time,
+#                              event = os_data$os_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
 ```
 <br>
 
@@ -1803,7 +1803,7 @@ rf_results %>% # Compare both models
               collect_predictions() %>% 
               mutate(model = "kknn")) %>% 
   group_by(model) %>% 
-  roc_curve(vital_new, .pred_Dead) %>% 
+  roc_curve(vital_new, .pred_Alive) %>% 
   autoplot()
 
 rf_results %>% # Compare both models
@@ -1908,9 +1908,9 @@ workflow() %>%
 ###################################### tree----
 set.seed(789)
 # Need to train the model one more time but without tuning to go faster
-importance_spec <- tree_spec %>% 
-  finalize_model(select_best(tree_tune, "roc_auc")) %>% 
-  set_engine("rpart", importance = "permutation") # permutation based importance
+# importance_spec <- tree_spec %>% 
+#   finalize_model(select_best(tree_tune, "roc_auc")) %>% 
+#   set_engine("rpart", importance = "permutation") # permutation based importance
 
 # represents the mean decrease in node impurity (and not the mean decrease in accuracy)
 # workflow() %>% 
@@ -2077,22 +2077,22 @@ os_data <- mldata %>%
 
 ## HR
 ```{r}
-tbl1 <- os_data %>% select(os_event, os_time,
-                            raceeth, age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type,
-                            f10statistical_, f81com_y_pxl, f9statistical_9,
-                            f102avgcoocurre, f65flatness, f83com_x_mm, f87weighted_com) %>%
-  tbl_uvregression(method = survival::coxph,
-                   y = (Surv(time = os_data$os_time,
-                             event = os_data$os_event)),
-                   exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
-  bold_labels() %>% italicize_levels()
-
-tbl2 <- 
-  coxph(Surv(time = os_data$os_time,
-             event = os_data$os_event) ~ raceeth + age_at_diagnosis + tnm_cs_mixed_group_stage + treatment_type + f10statistical_ + f81com_y_pxl + f9statistical_9 + f102avgcoocurre + f65flatness + f83com_x_mm + f87weighted_com, data =  os_data) %>%
-  tbl_regression(exponentiate = TRUE) %>% bold_p(t = .05)
-
-tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Univariable**", "**Multivariable**"))
+# tbl1 <- os_data %>% select(os_event, os_time,
+#                             raceeth, age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type,
+#                             f10statistical_, f81com_y_pxl, f9statistical_9,
+#                             f102avgcoocurre, f65flatness, f83com_x_mm, f87weighted_com) %>%
+#   tbl_uvregression(method = survival::coxph,
+#                    y = (Surv(time = os_data$os_time,
+#                              event = os_data$os_event)),
+#                    exponentiate = TRUE) %>% bold_p(t = .05) %>% add_nevent(location = "level") %>% add_n(location = "level") %>%
+#   bold_labels() %>% italicize_levels()
+# 
+# tbl2 <- 
+#   coxph(Surv(time = os_data$os_time,
+#              event = os_data$os_event) ~ raceeth + age_at_diagnosis + tnm_cs_mixed_group_stage + treatment_type + f10statistical_ + f81com_y_pxl + f9statistical_9 + f102avgcoocurre + f65flatness + f83com_x_mm + f87weighted_com, data =  os_data) %>%
+#   tbl_regression(exponentiate = TRUE) %>% bold_p(t = .05)
+# 
+# tbl_merge(list(tbl1, tbl2), tab_spanner = c("**Univariable**", "**Multivariable**"))
 ```
 
 
