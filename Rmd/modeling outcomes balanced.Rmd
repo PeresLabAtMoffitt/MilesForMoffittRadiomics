@@ -75,10 +75,12 @@ clinical <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadi
          treatment_type, debulking_status,
          raceeth)
 
+# concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance.rds") %>% 
+#   filter(value_CCC >= 0.95) %>% 
+#   select(name) %>% 
+#   mutate(stable_features = str_match(name, "([a-z][:digit:]*)_*")[,2])
 concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance.rds") %>% 
-  filter(value_CCC >= 0.95) %>% 
-  select(name) %>% 
-  mutate(stable_features = str_match(name, "([a-z][:digit:]*)_*")[,2])
+  mutate(stable_features = str_match(namee, "([a-z][:digit:]*)_*")[,2])
 
 stable_features <- paste0(paste(#"nor_", 
                                 concordance$stable_features, "[a-z]", sep = ""), collapse = "|")
@@ -88,10 +90,17 @@ mldata <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiom
   right_join(., clinical %>% 
   select(mrn, has_the_patient_recurred),
              by = "mrn") %>% 
-  filter(!is.na(.[2]))
+  filter(!is.na(.[2])) %>% 
+  filter(contrastenhancementyn == "yes") %>% select(-contrastenhancementyn)
 
 clinical <- clinical %>% 
   filter(str_detect(mrn, paste(mldata$mrn, collapse = "|")))
+
+rec_data <- mldata %>% 
+  left_join(., clinical %>% 
+  select(mrn, rec_event, recurrence_time, treatment_type,
+         debulking_status), 
+  by = "mrn")
 ```
 
 # `r emo::ji("question_mark")`
@@ -112,8 +121,9 @@ From 451 clinical info,
 From 538 radiomics tumor info,  
  - 385 are biggest tumor
  - 344 patients are common with clinical data (aka -19 chemo only, -20 surg only, -3 well diff ; 1 is surg+well diff)  
+ - 48 were removed because not contrast enhanced image
 
-**We have now 344 patients in our cohort.**  
+**We have now 296 patients in our cohort.**  
 <br>
 
 ***
@@ -124,10 +134,7 @@ From 538 radiomics tumor info,
 <div class = "row">
 <div class = "col-md-5">
 ```{r demo}
-mldata %>% select(contrastenhancementyn) %>% 
-  tbl_summary(type = list(contrastenhancementyn ~ "categorical"))
-
-mldata %>%
+rec_data %>%
   full_join(., clinical) %>% 
   select(age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type, raceeth) %>% 
   tbl_summary(by = treatment_type) %>% 
@@ -162,8 +169,8 @@ p + scale_fill_viridis_c(
 <div class = "row">
 <div class = "col-md-5">
 ```{r}
-mldata %>% 
-  select(has_the_patient_recurred) %>% 
+rec_data %>% 
+  select(has_the_patient_recurred, treatment_type) %>% 
   tbl_summary(by = treatment_type, 
               sort = list(everything() ~ "frequency")
               ) %>% 
@@ -190,16 +197,14 @@ mldata %>%
 
 ## Stable features
 
-75 stable features were selected after concordance analysis with a concordance ≥ 0.95.
+`r nrow(concordance)` stable features were selected after concordance analysis with a concordance ≥ 0.95 and pearson correlation selection.
 
 ### Heatmap
 ```{r heatplot, fig.width=12}
-
-
-df1 <- as.data.frame(mldata %>% full_join(., clinical %>%
-                                            select(mrn, tnm_cs_mixed_group_stage, raceeth)) %>%
-                       select(-contrastenhancementyn)) %>%
-  distinct(mrn, .keep_all = TRUE) %>%
+heatmap_data <- as.data.frame(mldata %>% full_join(., clinical %>%
+                                            select(mrn, tnm_cs_mixed_group_stage, raceeth)) ) %>%
+  distinct(mrn, .keep_all = TRUE)
+df1 <- heatmap_data %>%
   # arrange(has_the_patient_recurred) %>%
   unite(mrn, c(mrn, has_the_patient_recurred, tnm_cs_mixed_group_stage, raceeth), sep = "_", remove = TRUE) %>%
   `row.names<-`(.$mrn) %>%
@@ -238,33 +243,40 @@ mycols <- cbind(condition_colors, condition_colors1)
 # Transpose
 df2 <- t(df2)
 
-heatmap.2(df2, #main = "kjh",
-          trace = "none", density="none", col=bluered(20), cexRow=1,
-          lwid=c(1.2, 10), # decrease width of left dendro
-          # lhei=c(1.1, 10),
-          margins = c(1,10), # bottom, right
-          ColSideColors = condition_colors,
-          scale = "none",
-          # Colv = FALSE,
-          key.par=list(mgp=c(1.5, 0.5, 0), # pos for value, number, axes
-                       mar=c(3.5, 1, 2.5, 1) # color key pos down, left, top, right
-                       )
-          )
-legend(0.78, 0.95, # right, up
-       legend = c("Recurrence", "No Recurrence"), fill = c("pink", "grey"), cex = 0.6,
-       bty = "n")
-
-# heatmap.plus(df2,
-#              col = bluered(20),
-#              cexRow = 1,
-#              margins = c(1, 10),
-#              # bottom, right
-#              ColSideColors = mycols,
-#              scale = "none"
-# )
+# heatmap.2(df2, #main = "kjh",
+#           trace = "none", density="none", col=bluered(20), cexRow=1,
+#           lwid=c(1.2, 10), # decrease width of left dendro
+#           # lhei=c(1.1, 10),
+#           margins = c(1,10), # bottom, right
+#           ColSideColors = condition_colors,
+#           scale = "none",
+#           # Colv = FALSE,
+#           key.par=list(mgp=c(1.5, 0.5, 0), # pos for value, number, axes
+#                        mar=c(3.5, 1, 2.5, 1) # color key pos down, left, top, right
+#                        )
+#           )
 # legend(0.78, 0.95, # right, up
 #        legend = c("Recurrence", "No Recurrence"), fill = c("pink", "grey"), cex = 0.6,
 #        bty = "n")
+
+library(ComplexHeatmap)
+
+column_ho = HeatmapAnnotation(raceeth = c(as.character(heatmap_data$raceeth)),
+                              outcome = (heatmap_data$has_the_patient_recurred), 
+                              col = list(raceeth = 
+                                           c("White Non-Hispanic" = "#932667FF", 
+                                             "Black Non-Hispanic" = "grey",
+                                             "Hispanic" = "blue", 
+                                             "Other/Unknown" = "pink"),
+                                         outcome = 
+                                           c("Recurrence" = "yellow", 
+                                             "No Recurrence" = "grey")
+                              ),
+    na_col = "black")
+Heatmap(df2, name = " ",
+        cluster_rows = FALSE, cluster_columns = FALSE,
+        top_annotation = column_ho
+        )
 ```
 <br>
 <br>
@@ -301,12 +313,6 @@ ggcorrplot(mat, hc.order = TRUE, method = "square",
 
 ### Features by outcome status
 ```{r}
-rec_data <- mldata %>% 
-  left_join(., clinical %>% 
-  select(mrn, rec_event, recurrence_time, treatment_type,
-         debulking_status), 
-  by = "mrn")
-
 rec_data %>% select(matches("^f[0-9]"), has_the_patient_recurred) %>%
   tbl_summary(by = has_the_patient_recurred,
               sort = list(everything() ~ "frequency"),
@@ -390,7 +396,7 @@ ggsurvplot(myplot, data = rec_data,
 ## Splitting the data
 
 The data is split in 3/4 for training and testing for better robustness.  
-A strata is applied to the split function to balance contrastenhancementyn in both sets.  
+A strata is applied to the split function to balance has_the_patient_recurred in both sets.  
 ```{r}
 # Explore what will need to be changed
 skimr::skim(mldata)
@@ -399,7 +405,7 @@ set.seed(1234)
 
 # 1. Splitting the data
 # 3/4 of the data into the training set but split evenly winthin race
-data_split <- initial_split(mldata, prop = 3/4, strata = contrastenhancementyn)
+data_split <- initial_split(mldata, prop = 3/4, strata = has_the_patient_recurred)
 # Create training and testing datasets:
 train_data <- training(data_split)
 test_data  <- testing(data_split)
@@ -410,9 +416,8 @@ train_data %>%
   mutate(set = "training") %>% 
   bind_rows(., test_data %>% 
   mutate(set = "testing")) %>% 
-  select(has_the_patient_recurred, contrastenhancementyn, set) %>% 
-  tbl_summary(by = set,
-              type = list(contrastenhancementyn ~ "categorical")) %>% 
+  select(has_the_patient_recurred, set) %>% 
+  tbl_summary(by = set) %>% 
   add_p()
 ```
 <br>
@@ -425,7 +430,7 @@ It is an imbalance between Recurrence and no recurrence cases, the models use `s
 It use nearest neighbor to create new synthetic observation almost similar.  
 To increase accuracy, I used tuning function to select the best number of tree, number of node, sample_size, penalty,, etc... and avoid bias decision.
 I used a 10 fold cross validation for the tuning for better tuning. It evaluate metrics like accuracy and roc_auc 10 times on a different split of the training set.
-A strata is again applied to the cross validation sets to balance contrastenhancementyn.  
+A strata is again applied to the cross validation sets to balance has_the_patient_recurred  
 
 ```{r recipe}
 # 2. Data pre processing and features engineering + imputation
@@ -435,7 +440,7 @@ mldata_recipe <-
   recipe(has_the_patient_recurred ~ ., data = train_data)  %>% 
   # 2.keep these variables but not use them as either outcomes or predictors
   update_role(mrn, new_role = "ID") %>%
-  update_role(contrastenhancementyn, new_role = "strata") %>% 
+  # update_role(contrastenhancementyn, new_role = "strata") %>% 
   # remove variables that contain only a single value.
   step_zv(all_predictors()) %>% # or step_nzv
   # 3.If factor with too much levels, collapse lower levels
@@ -462,7 +467,7 @@ mldata_recipe <-
 
 set.seed(456)
 # 10 fold cross validation
-mldata_folds <- vfold_cv(train_data, strata = contrastenhancementyn)
+mldata_folds <- vfold_cv(train_data, strata = has_the_patient_recurred)
 ```
 <br>
 
@@ -491,8 +496,8 @@ set.seed(789)
 tree_tune <- tree_workflow %>% 
   tune_grid(
     resamples = mldata_folds,
-    grid = tree_grid,
-    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)
+    grid = tree_grid#,
+    # metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)
   )
 # Explore tuning
 autoplot(tree_tune) + theme_light()
@@ -509,7 +514,7 @@ cart_spec <-
 set.seed(789)
 cart_fit <- 
    cart_spec %>%
-   fit(has_the_patient_recurred ~ .-mrn-contrastenhancementyn, data = train_data)
+   fit(has_the_patient_recurred ~ .-mrn, data = train_data)
 cart_fit <- repair_call(cart_fit, data = train_data)
 
 # tree_tune %>% 
@@ -1341,7 +1346,8 @@ mldata <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiom
   select(mrn, vital_new),
              by = "mrn") %>% 
   filter(!is.na(.[2])) %>% 
-  mutate(vital_new = factor(vital_new))
+  mutate(vital_new = factor(vital_new)) %>% 
+  filter(contrastenhancementyn == "yes") %>% select(-contrastenhancementyn)
 
 # clinical <- clinical %>% 
 #   filter(str_detect(mrn, paste(mldata$mrn, collapse = "|")))
@@ -1469,7 +1475,7 @@ ggsurvplot(myplot, data = os_data,
 ## Splitting the data
 
 The data is split in 3/4 for training and testing for better robustness.  
-A strata is applied to the split function to balance contrastenhancementyn in both sets.  
+A strata is applied to the split function to balance vital_new in both sets.  
 ```{r}
 # Explore what will need to be changed
 # skimr::skim(mldata)
@@ -1478,7 +1484,7 @@ set.seed(123)
 
 # 1. Splitting the data
 # 3/4 of the data into the training set but split evenly winthin race
-data_split <- initial_split(mldata, prop = 3/4, strata = contrastenhancementyn)
+data_split <- initial_split(mldata, prop = 3/4, strata = vital_new)
 # Create training and testing datasets:
 train_data <- training(data_split)
 test_data  <- testing(data_split)
@@ -1489,9 +1495,8 @@ train_data %>%
   mutate(set = "training") %>% 
   bind_rows(., test_data %>% 
   mutate(set = "testing")) %>% 
-  select(vital_new, contrastenhancementyn, set) %>% 
-  tbl_summary(by = set,
-              type = list(contrastenhancementyn ~ "categorical")) %>% 
+  select(vital_new, set) %>% 
+  tbl_summary(by = set) %>% 
   add_p()
 ```
 <br>
@@ -1508,7 +1513,6 @@ mldata_recipe <-
   recipe(vital_new ~ ., data = train_data)  %>% 
   # 2.keep these variables but not use them as either outcomes or predictors
   update_role(mrn, new_role = "ID") %>%
-  update_role(contrastenhancementyn, new_role = "strata") %>% 
 
   step_zv(all_predictors()) %>% # or step_nzv
   step_novel(all_nominal(), -all_outcomes()) %>% # Create a previously unseen factor level to a new value.
@@ -1524,7 +1528,7 @@ mldata_recipe <-
 # train hyperparameter
 set.seed(456)
 # 10 fold cross validation
-mldata_folds <- vfold_cv(train_data, strata = contrastenhancementyn)
+mldata_folds <- vfold_cv(train_data, strata = vital_new)
 ```
 <br>
 
@@ -1574,7 +1578,7 @@ cart_spec <-
 set.seed(789)
 cart_fit <- 
    cart_spec %>%
-   fit(vital_new ~ .-mrn-contrastenhancementyn, data = train_data)
+   fit(vital_new ~ .-mrn, data = train_data)
 cart_fit <- repair_call(cart_fit, data = train_data)
 
 final_tree <- tree_workflow %>% 
