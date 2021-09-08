@@ -1,0 +1,697 @@
+---
+title: "modeling"
+author: "Christelle Colin-Leitzinger"
+date: '`r Sys.Date()`'
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: false
+    theme: united
+    highlight: pygments
+    df_print: paged
+editor_options: 
+  chunk_output_type: console
+---
+
+<style type="text/css">
+.figure {
+   margin-top: 25px;
+   margin-bottom: 10px;
+}
+
+table {
+    margin-top: 10px;
+    margin-bottom: 25px;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE,
+                      cache = FALSE,
+                      # fig.width = 7, fig.height = 5, 
+                      fig.align='center'#, fig.show='hold'
+                      )
+options(gtsummary.print_engine = "gt")
+options(gtsummary.as_gt.addl_cmds = "gt::tab_options(table.font.size = 14, data_row.padding = gt::px(1))")
+```
+
+
+```{r library}
+library(tidyverse)
+library(tidymodels)
+# library(broom.mixed) # for converting bayesian models to tidy tibbles
+# library(dotwhisker)  # for visualizing regression results
+library(themis)
+```
+
+
+```{r load}
+clinical <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/clinical.rds") %>% 
+  select(mrn, has_the_patient_recurred, w_wo_contrast)
+
+concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance.rds") %>% 
+  filter(value_CCC >= 0.95) %>% 
+  select(name) %>% 
+  mutate(stable_features = str_match(name, "([a-z][:digit:]*)_*")[,2])
+
+stable_features <- paste0(paste(#"nor_", 
+                                concordance$stable_features, "[a-z]", sep = ""), collapse = "|")
+
+mldata <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/radiomics.rds") %>% 
+  select(mrn, matches(stable_features)) %>% 
+  right_join(., clinical, by = "mrn") %>% 
+  filter(!is.na(.[2]))
+```
+
+
+```{r}
+# Explore what will need to be changed
+skimr::skim(mldata)
+
+
+set.seed(123)
+
+# 1. Splitting the data
+# 3/4 of the data into the training set but split evenly winthin race
+data_split <- initial_split(mldata, prop = 3/4, strata = w_wo_contrast)
+# Create training and testing datasets:
+train_data <- training(data_split)
+test_data  <- testing(data_split)
+
+# 2. Data pre processing and features engineering + imputation
+# Recipe
+mldata_recipe <-
+  # 1.model formula
+  recipe(has_the_patient_recurred ~ ., data = train_data)  %>% 
+  # 2.keep these variables but not use them as either outcomes or predictors
+  update_role(mrn, new_role = "ID") %>%
+  # update_role(w_wo_contrast, new_role = "Other") %>%
+  # remove variables that contain only a single value.
+  step_zv(all_predictors()) %>% # or step_nzv
+  # 3.If factor with too much levels, collapse lower levels
+  # step_other(Histology, threshold = 0.05) %>% 
+  # data_recipe %>% prep() %>% juice() %>% count(Histology)
+  
+  # 4.Imputation
+  step_unknown(all_nominal_predictors()) %>% 
+  # step_impute_median(all_numeric_predictors()) %>%
+  # 5.change all factor to indicator/dummy variables for model that cannot handle factor variables
+  step_dummy(all_nominal(), -all_outcomes()) #%>%
+  
+  # Feature engineering on dates
+  # step_date(all_of(meaningful_dates), features = c("year", "month")) %>% 
+  # step_rm(meaningful_dates)
+  
+  # LAST.For imbalance, model memorize the few example and
+  # step_smote(has_the_patient_recurred) # Use nearest neighbor to create new synthetic observation almost similar
+
+############################################################################### II ### Data Tuning ----
+# train hyperparameter
+set.seed(456)
+# 10 fold cross validation
+mldata_folds <- vfold_cv(train_data, strata = w_wo_contrast)
+```
+
+# DECISION TREE
+```{r decision_tree}
+###################################################################################### DECISION TREE----
+set.seed(789)
+
+# With workflow
+tree_spec <- decision_tree(
+  cost_complexity = tune(),
+  tree_depth = tune(),
+  min_n = tune()) %>% 
+  set_engine("rpart") %>% 
+  set_mode("classification")
+
+tree_workflow <- 
+  workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(tree_spec) 
+
+tree_grid <- grid_regular(cost_complexity(),
+                          tree_depth(),
+                          min_n(), levels = 4)
+
+doParallel::registerDoParallel()
+tree_tune <- tree_workflow %>% 
+  tune_grid(
+    resamples = mldata_folds,
+    grid = tree_grid,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity)
+  )
+
+# Explore
+
+autoplot(tree_tune) + theme_light()
+
+final_tree <- tree_workflow %>% 
+  finalize_workflow(select_best(tree_tune, "roc_auc"))
+final_tree
+
+tree_final_fit <- fit(final_tree, data = train_data)
+tree_final_fit
+
+library(rpart.plot)
+tree_final_fit %>%
+  extract_fit_engine() %>%
+  rpart.plot()
+```
+
+# xgboost
+```{r xgboost}
+############################################################################################### xgboost----
+# xgboost_recipe <- 
+#   recipe(formula = has_the_patient_recurred ~ ., data = train_data) %>% 
+#   step_novel(all_nominal(), -all_outcomes()) %>% 
+#   step_dummy(all_nominal(), -all_outcomes(), one_hot = TRUE) %>% 
+#   step_zv(all_predictors()) 
+library(xgboost)
+xgboost_spec <- 
+  boost_tree(trees = tune(), min_n = tune(), tree_depth = tune(), learn_rate = tune(), 
+             loss_reduction = tune(), sample_size = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("xgboost") 
+
+xgboost_workflow <- 
+  workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(xgboost_spec) 
+
+set.seed(789)
+xgboost_tune <-
+  tune_grid(xgboost_workflow, resamples = mldata_folds, grid = 10)
+
+######################################################################### Explore xgboost Tuning Results ----
+
+# Visualize tuned parameters
+autoplot(xgboost_tune)
+# mtry is the number of predictor randomly selected -> needs to be 
+# mim_n is the minimal node size -> needs to be small
+
+xgboost_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "accuracy") %>% 
+  select(mean, trees:sample_size) %>% 
+  pivot_longer(trees:sample_size,
+               values_to = "value",
+               names_to = "param") %>% 
+  ggplot(aes(value, mean, color = param)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap( . ~ param, scales = "free_x")
+
+xgboost_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "roc_auc") %>% 
+  select(mean, trees:sample_size) %>% 
+  pivot_longer(trees:sample_size,
+               values_to = "value",
+               names_to = "param") %>% 
+  ggplot(aes(value, mean, color = param)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap( . ~ param, scales = "free_x")
+
+final_xgboost <- xgboost_workflow %>% 
+  finalize_workflow(select_best(xgboost_tune, "roc_auc"))
+final_xgboost
+```
+
+# RAMDOM FOREST
+```{r rand_forest}
+############################################################################################### RAMDOM FOREST ----
+set.seed(789)
+# Model specification
+ranger_spec <- rand_forest(
+  # tune right value for the number of predictors that will be randomly sampled at each split when creating the tree models
+  mtry = tune(), 
+  # tune right value for the minimum number of data points in a node that are required for the node to be split further.
+  min_n = tune(),
+  trees = 1000) %>% 
+  set_mode("classification") %>% 
+  set_engine("ranger")
+
+# Set up a work flow
+ranger_workflow <- 
+  workflow() %>% 
+  # Add preprocessor
+  add_recipe(mldata_recipe) %>% # here is an unfit mode
+  add_model(ranger_spec) # add our model specification
+
+# Tuning
+set.seed(789)
+doParallel::registerDoParallel()
+# will tune mtry and min_m on a grid
+ranger_tune <-
+  tune_grid(ranger_workflow, # Will take our workflow and apply it on
+            resamples = mldata_folds, # each fold of the data for 
+            grid = 20) # How many candidate point do I want to try
+# Try the 20 point with each min_n and mtry
+# Then train on analysis cv and assessed on the test of cv
+# will compute performance matrix on each of these of the 20 candidate model
+
+# May need to add specificity and sensitivity to metrics if we have rare events. these 2 will tell us how the model did for our positive and negative cases
+# If sens is low it means the model had a really hard time finding the rare case (could mean step_smote is bad idea for this model)
+
+
+############################################################################### II ### Explore Tuning Results ----
+
+# Visualize tuned parameters
+# autoplot(ranger_tune)
+# mtry is the number of predictor randomly selected -> needs to be 
+# mim_n is the minimal node size -> needs to be small
+
+ranger_tune %>% 
+  collect_metrics() %>% 
+  filter(.metric == "roc_auc") %>% 
+  select(mean, min_n, mtry) %>% 
+  pivot_longer(min_n:mtry,
+               values_to = "value",
+               names_to = "param") %>% 
+  ggplot(aes(value, mean, color = param)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap( . ~ param, scales = "free_x")
+
+
+# # Tune more?
+# # Can make a regular grid
+# new_grid <- grid_regular(
+#   mtry(range = c(25, 75)),
+#   min_n(range = c(0, 25)),
+#   levels = 10
+# )
+# 
+# set.seed(123)
+# sec_tune_results <- tune_grid( # will tune mtry and min_m on a grid
+#   tune_wf, # tune worflow
+#   resamples = data_folds, # on this data
+#   grid = new_grid
+# )
+# 
+# sec_tune_results %>% collect_metrics() %>% 
+#   filter(.metric == "roc_auc") %>% 
+#   mutate(min_n = factor(min_n)) %>% 
+#   ggplot(aes(mtry, mean, color = min_n)) +
+#   geom_line(alpha = 0.5, size = 1.5) +
+#   geom_point()
+
+# Step Finalize the model with our tuned parameters
+# best_auc <- select_best(ranger_tune, # or sec_tune_results if tuned more,
+#                         "roc_auc")
+# 
+# final_rf <- finalize_model(ranger_spec,
+#                            best_auc)
+# # Aka same
+# final_rf <- ranger_spec %>% 
+#   finalize_model(select_best(ranger_tune, "accuracy"))
+
+final_rf <- ranger_workflow %>% 
+  finalize_workflow(select_best(ranger_tune, "accuracy"))
+final_rf
+```
+
+# LOGISTIC REGRESSION
+```{r logistic_reg}
+############################################################################################### LOGISTIC REGRESSION ----
+
+# Tune lambda
+
+# logistic reg, choose regularized log reg with mixture 1 for Lasso model
+# Because lots of var for few rows (samples) but don't know which vars are important
+
+# Find the optimal value of lambda that minimizes the cross-validation error
+# Need to prep data differently
+train_data_lambda <- training(data_split) %>% 
+  drop_na() %>% select(-mrn)
+
+# Dummy code categorical predictor variables
+x <- model.matrix(has_the_patient_recurred ~ .-w_wo_contrast, data = train_data_lambda)[,-1]
+# Convert the outcome (class) to a numerical variable
+y <- ifelse(train_data_lambda$has_the_patient_recurred == "Recurrence", 1, 0)
+
+library(glmnet)
+set.seed(123)
+cv.lasso <- cv.glmnet(x, y, alpha = 1, family = "binomial")
+plot(cv.lasso)
+# cv.lasso$lambda.min
+# # The left dashed vertical line indicates that the log of the optimal value of lambda is approximately -4, 
+# # which is the one that minimizes the prediction error. This lambda value will give the most accurate model.
+# cv.lasso$lambda.1se
+# # Fit the final model on the training data
+# model <- glmnet(x, y, alpha = 1, family = "binomial",
+#                 lambda = cv.lasso$lambda.min)
+# # Display regression coefficients
+# coef(model)
+
+# library(usemodels) # Gives a scaffolding of the modeling code
+# use_glmnet(has_the_patient_recurred ~ ., data = train_data)
+
+# glmnet_recipe <- 
+#   recipe(formula = has_the_patient_recurred ~ ., data = train_data) %>% 
+#   step_novel(all_nominal(), -all_outcomes()) %>% 
+#   step_dummy(all_nominal(), -all_outcomes()) %>% 
+#   step_zv(all_predictors()) %>% 
+#   step_normalize(all_predictors(), -all_nominal()) 
+
+set.seed(789)
+
+glmnet_spec <- 
+  logistic_reg(penalty = tune(), mixture = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet") 
+
+glmnet_workflow <- 
+  workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(glmnet_spec) 
+
+glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20), mixture = c(0.05, 
+                                                                                      0.2, 0.4, 0.6, 0.8, 1)) 
+
+glmnet_tune <- 
+  tune_grid(glmnet_workflow, resamples = mldata_folds, grid = glmnet_grid) 
+
+############################################################################### II ### Explore Tuning Results ----
+
+
+# Visualize tuned parameters
+autoplot(glmnet_tune)
+# mtry is the number of predictor randomly selected -> needs to be 
+# mim_n is the minimal node size -> needs to be small
+
+
+# Step Finalize the model with our tuned parameters
+# best_acc <- select_best(glmnet_tune, # or sec_tune_results if tuned more,
+#                         "accuracy")
+# 
+# final_glmnet <- finalize_model(glmnet_spec,
+#                                best_acc)
+# # Aka same
+# final_glmnet <- glmnet_spec %>% 
+#   finalize_model(select_best(glmnet_tune, "roc_auc"))
+
+final_glmnet <- glmnet_workflow %>% 
+  finalize_workflow(select_best(glmnet_tune, "roc_auc"))
+final_glmnet
+
+
+################################################################### Calculate Performance Metrics with tuned model----
+tree_results <- final_tree %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
+  )
+
+xgboost_results <- final_xgboost %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
+  )
+
+glmnet_results <- final_glmnet %>% 
+  fit_resamples(
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE)
+  )
+
+rf_results <- final_rf %>% 
+  fit_resamples( # is not doing any tuning, measuring performance on cross validation data
+    resamples = mldata_folds,
+    metrics = metric_set(roc_auc, accuracy, sensitivity, specificity),
+    control = control_resamples(save_pred = TRUE, verbose = TRUE)
+  )
+
+###############################################################################  Support vector machine # not necessary
+###############################################################################  neural network
+```
+
+# EVALUATE MODELS
+```{r evaluate models}
+############################################################################################### EVALUATE MODELS ----
+# Explore Performance Metrics
+collect_metrics(xgboost_results)
+collect_metrics(tree_results)
+collect_metrics(rf_results)
+collect_metrics(glmnet_results)
+# Accuracy is llow
+# Sensitivity has 50% chance finding the minority class pop
+
+xgboost_results %>% 
+  conf_mat_resampled()
+tree_results %>% 
+  conf_mat_resampled()
+rf_results %>% 
+  conf_mat_resampled()
+glmnet_results %>% 
+  conf_mat_resampled()
+
+# Visualization
+xgboost_results %>% # is the saved predictions
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()
+tree_results %>% 
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()
+rf_results %>% # is the saved predictions
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()
+glmnet_results %>% 
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()
+
+xgboost_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+  autoplot()
+tree_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+  autoplot()
+rf_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+  autoplot()
+glmnet_results %>% 
+  collect_predictions() %>% 
+  group_by(id) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+  autoplot()
+
+rf_results %>% # Compare both models
+  collect_predictions() %>% 
+  mutate(model = "rf") %>% 
+  bind_rows(glmnet_results %>% 
+              collect_predictions() %>% 
+              mutate(model = "glmet")) %>% 
+  bind_rows(xgboost_results %>% 
+              collect_predictions() %>% 
+              mutate(model = "xgboost")) %>% 
+  bind_rows(tree_results %>% 
+              collect_predictions() %>% 
+              mutate(model = "tree")) %>% 
+  group_by(model) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+  autoplot()
+
+
+
+# Calculate prediction after the fact
+xgboost_results %>% collect_predictions() %>% 
+  ppv(truth = has_the_patient_recurred, estimate = .pred_class) # do histog
+tree_results %>% collect_predictions() %>% 
+  ppv(truth = has_the_patient_recurred, estimate = .pred_class)
+rf_results %>% collect_predictions() %>% 
+  ppv(truth = has_the_patient_recurred, estimate = .pred_class)
+glmnet_results %>% collect_predictions() %>% 
+  ppv(truth = has_the_patient_recurred, estimate = .pred_class)
+```
+
+# features importance
+```{r vip}
+############################################################################################### Step Explore of features importance ----
+library(vip) 
+
+###################################### xgboost----
+# # Need to train the model one more time but without tuning to go faster
+# importance_spec <- xgboost_spec %>% 
+#   finalize_model(select_best(glmnet_tune, "roc_auc")) %>% 
+#   set_engine("xgboost", importance = "permutation") # permutation based importance
+# 
+# # represents the mean decrease in node impurity (and not the mean decrease in accuracy)
+# workflow() %>% 
+#   add_recipe(mldata_recipe) %>% 
+#   add_model(importance_spec) %>% 
+#   fit(train_data) %>% 
+#   extract_fit_parsnip() %>% 
+#   vip(aesthetics = list(alpha = 0.5, fill = "midnightblue"),
+#       # geom = "point",
+#       num_features = 20
+#   )
+
+###################################### glmnet----
+# Need to train the model one more time but without tuning to go faster
+importance_spec <- glmnet_spec %>% 
+  finalize_model(select_best(glmnet_tune, "roc_auc")) %>% 
+  set_engine("glmnet", importance = "permutation") # permutation based importance
+
+# represents the mean decrease in node impurity (and not the mean decrease in accuracy)
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  extract_fit_parsnip() %>% 
+  vip(aesthetics = list(alpha = 0.5, fill = "midnightblue"),
+      # geom = "point",
+      num_features = 20
+  )
+
+
+###################################### Ranger----
+
+# Need to train the model one more time but without tuning to go faster
+importance_spec <- ranger_spec %>% 
+  finalize_model(select_best(ranger_tune, "roc_auc")) %>% 
+  set_engine("ranger", importance = "permutation") # permutation based importance
+
+# represents the mean decrease in node impurity (and not the mean decrease in accuracy)
+workflow() %>% 
+  add_recipe(mldata_recipe) %>% 
+  add_model(importance_spec) %>% 
+  fit(train_data) %>% 
+  extract_fit_parsnip() %>% 
+  vip(aesthetics = list(alpha = 0.5, fill = "midnightblue"),
+      # geom = "point",
+      num_features = 20
+  )
+```
+
+# Fit on testing using RF
+
+```{r fit on testing}
+############################################################################################### AT LAST
+# Step finalize Fit : fitting to the whole training and evaluating on the testing data
+# With the model of our choice
+final_fit <- final_rf %>% 
+  last_fit(data_split)
+
+# Step Explore the modelon testing set
+# Collect metrics and compare number with the metrics from the training
+# Can see if lower or higher...overfit our data, etc
+collect_metrics(final_fit)
+# Compare to the training previous number
+collect_metrics(rf_results) # as a meminder of previous results
+# Test data is a littke lower with samll SD
+
+collect_metrics(final_fit) %>% 
+  mutate(set = "testing") %>% 
+  rename(mean = .estimate) %>% 
+  bind_rows(collect_metrics(rf_results) %>% 
+              mutate(set = "training")) %>% 
+  filter(str_detect(.metric, "accuracy|roc_auc")) %>% 
+  ggplot(aes(x= .metric, y=mean, fill = set))+
+  geom_bar(stat = "identity",
+           position = position_dodge()) + 
+  geom_errorbar(aes(xmin = mean - std_err,
+                    xmax = mean + std_err),
+                width = 0.2, alpha = 0.5)
+collect_metrics(final_fit) %>% 
+  mutate(set = "testing") %>% 
+  rename(mean = .estimate) %>% 
+  bind_rows(collect_metrics(rf_results) %>% 
+              mutate(set = "training")) %>% 
+  filter(str_detect(.metric, "accuracy|roc_auc")) %>% 
+  ggplot(aes(x= .metric, y=mean, color = set))+
+  geom_point() + 
+  geom_errorbar(aes(xmin = mean - std_err,
+                    xmax = mean + std_err),
+                width = 0.2, alpha = 0.5)
+
+final_fit %>% 
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class)
+final_fit %>% 
+  collect_predictions() %>% 
+  conf_mat(truth = has_the_patient_recurred, estimate = .pred_class) %>% 
+  autoplot()
+```
+
+# Fit on testing using GLMET
+```{r}
+# If choose glmnet, can see estimate on the testing
+final_fit_sec <- final_glmnet %>% 
+  last_fit(data_split)
+
+final_fit_sec %>%
+  pull(.workflow) %>% 
+  pluck(1) %>% 
+  tidy(exponentiate = TRUE) %>% 
+  arrange(desc(abs(estimate))) # %>%
+# kableExtra::kable(digits = 3)
+
+final_fit_sec %>% # WARNING it uses the scaled data
+  pull(.workflow) %>% 
+  pluck(1) %>% 
+  tidy() %>% 
+  filter(term != "(Intercept)") %>% 
+  arrange(desc(abs(estimate))) %>% 
+  filter(abs(estimate) >0) %>% 
+  ggplot(aes(estimate, fct_reorder(term, desc(estimate))))+
+  geom_vline(xintercept = 0, color = "lightgrey", lty = 2, size = 1.2) +
+  # geom_errorbar(aes(xmin = estimate - std.error,
+  #                   xmax = estimate + std.error),
+  #               width = 0.2, alpha = 0.5)+
+  geom_point() + 
+  theme_classic()
+
+
+collect_metrics(final_fit)
+# Compare to the training previous number
+collect_metrics(glmnet_results)
+```
+
+## Compare both
+
+```{r}
+final_fit_sec %>% collect_predictions() %>% 
+  mutate(set = "glmnet") %>% 
+  bind_rows(final_fit %>% collect_predictions() %>% 
+              mutate(set = "rf")) %>% 
+  group_by(set) %>% 
+  summarize(recurrence = mean(.pred_Recurrence),
+            no_recurrence = mean(`.pred_No Recurrence`)) %>% 
+  ungroup() %>% 
+  pivot_longer(cols = -set, names_to = "status", values_to = "probability") %>% 
+  ggplot(aes(x= set, y=probability, fill = status))+
+  geom_bar(stat = "identity",
+           position = position_dodge())
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
