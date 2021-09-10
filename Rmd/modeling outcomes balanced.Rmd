@@ -531,7 +531,7 @@ cart_fit <- repair_call(cart_fit, data = train_data)
 #   facet_grid( . ~ .metric)
 set.seed(789)
 final_tree <- tree_workflow %>% 
-  finalize_workflow(select_best(tree_tune, "accuracy"))
+  finalize_workflow(select_best(tree_tune, "roc_auc"))
 final_tree
 set.seed(789)
 tree_final_fit <- fit(final_tree, data = train_data)
@@ -631,7 +631,7 @@ autoplot(xgboost_tune)
 set.seed(789)
 
 final_xgboost <- xgboost_workflow %>% 
-  finalize_workflow(select_best(xgboost_tune, "roc_auc")) #roc_auc
+  finalize_workflow(select_best(xgboost_tune, "roc_auc"))
 final_xgboost
 ```
 <br>
@@ -728,7 +728,7 @@ autoplot(ranger_tune)
 set.seed(789)
 
 final_rf <- ranger_workflow %>% 
-  finalize_workflow(select_best(ranger_tune, "accuracy"))# acc
+  finalize_workflow(select_best(ranger_tune, "roc_auc"))# acc
 final_rf
 ```
 <br>
@@ -808,7 +808,7 @@ autoplot(glmnet_tune)
 set.seed(789)
 
 final_glmnet <- glmnet_workflow %>% 
-  finalize_workflow(select_best(glmnet_tune, "roc_auc")) #roc_auc
+  finalize_workflow(select_best(glmnet_tune, "accuracy")) #roc_auc
 final_glmnet
 ```
 <br>
@@ -837,7 +837,7 @@ autoplot(kknn_tune)
 set.seed(789)
 
 final_kknn <- kknn_workflow %>% 
-  finalize_workflow(select_best(kknn_tune, "accuracy"))# acc
+  finalize_workflow(select_best(kknn_tune, "roc_auc"))# acc
 final_kknn
 ```
 
@@ -1582,7 +1582,7 @@ cart_fit <-
 cart_fit <- repair_call(cart_fit, data = train_data)
 
 final_tree <- tree_workflow %>% 
-  finalize_workflow(select_best(tree_tune, "roc_auc"))
+  finalize_workflow(select_best(tree_tune, "accuracy"))
 final_tree
 
 tree_final_fit <- fit(final_tree, data = train_data)
@@ -1668,7 +1668,7 @@ ranger_tune <-
 autoplot(ranger_tune)
 
 final_rf <- ranger_workflow %>% 
-  finalize_workflow(select_best(ranger_tune, "accuracy"))
+  finalize_workflow(select_best(ranger_tune, "roc_auc"))
 final_rf
 ```
 <br>
@@ -1706,7 +1706,7 @@ glmnet_tune <-
 autoplot(glmnet_tune)
 
 final_glmnet <- glmnet_workflow %>% 
-  finalize_workflow(select_best(glmnet_tune, "roc_auc")) 
+  finalize_workflow(select_best(glmnet_tune, "accuracy")) 
 final_glmnet
 ```
 <br>
@@ -1734,7 +1734,7 @@ kknn_tune <-
 autoplot(kknn_tune)
 
 final_kknn <- kknn_workflow %>% 
-  finalize_workflow(select_best(kknn_tune, "roc_auc"))
+  finalize_workflow(select_best(kknn_tune, "accuracy"))
 final_kknn
 ```
 
