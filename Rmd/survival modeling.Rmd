@@ -1,6 +1,6 @@
 ---
 title: "survival modeling with radiomic features"
-author: "Christelle Colin-Leitzinger"
+author: "Christelle Colin-Leitsurv_modelinger"
 date: '`r Sys.Date()`'
 output: 
   html_document:
@@ -34,12 +34,12 @@ knitr::opts_chunk$set(echo = FALSE,
                       # fig.width = 7, fig.height = 5, 
                       fig.align='center'#, fig.show='hold'
                       )
-options(gtsummary.print_engine = "gt")
-options(gtsummary.as_gt.addl_cmds = "gt::tab_options(table.font.size = 14, data_row.padding = gt::px(1))")
+# options(gtsummary.print_engine = "gt")
+# options(gtsummary.as_gt.addl_cmds = "gt::tab_options(table.font.sisurv_modele = 14, data_row.padding = gt::px(1))")
 ```
 
 <style>
-div.blue { background-color:#FF9966; border-radius: 5px; padding: 20px; font-size: 38px}
+div.blue { background-color:#FF9966; border-radius: 5px; padding: 20px; font-sisurv_modele: 38px}
 </style>
 <div class = "blue">
 
@@ -51,7 +51,7 @@ div.blue { background-color:#FF9966; border-radius: 5px; padding: 20px; font-siz
 ```{r library}
 library(tidyverse)
 library(tidymodels)
-# library(dotwhisker)  # for visualizing regression results
+# library(dotwhisker)  # for visualisurv_modeling regression results
 # library(themis)
 library(gtsummary)
 # library(gplots)
@@ -78,13 +78,13 @@ clinical <- read_rds(paste0(here::here(), "/clinical.rds")) %>%
 concordanceCCC <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordanceCCC.rds") %>%
   filter(value_CCC >= 0.95) %>%
   select(name) %>%
-  mutate(stable_features = str_match(name, "([a-z][:digit:]*)_*")[,2])
+  mutate(stable_features = str_match(name, "([a-surv_model][:digit:]*)_*")[,2])
 
 concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance_cor.rds") %>% 
-  mutate(stable_features = str_match(namee, "([a-z][:digit:]*)_*")[,2])
+  mutate(stable_features = str_match(namee, "([a-surv_model][:digit:]*)_*")[,2])
 
 stable_features <- paste0(paste(#"nor_", 
-                                concordance$stable_features, "[a-z]", sep = ""), collapse = "|")
+                                concordance$stable_features, "[a-surv_model]", sep = ""), collapse = "|")
 
 rec_data <- read_rds(paste0(here::here(), "/radiomics.rds")) %>% 
   filter(contrastenhancementyn == "yes") %>% 
@@ -128,16 +128,16 @@ tbl1 <- rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
 tbl1
 
 concordance <- tbl1$table_body %>% filter(p.value < 0.1) %>% select(variable, p.value) %>%
-  mutate(stable_features = str_match(variable, "([a-z][:digit:]*)_*")[,2])
+  mutate(stable_features = str_match(variable, "([a-surv_model][:digit:]*)_*")[,2])
 concordance[, 1:2]
 ```
 
 ```{r mldata}
 concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance.rds") %>% 
-  mutate(stable_features = str_match(namee, "([a-z][:digit:]*)_*")[,2])
+  mutate(stable_features = str_match(namee, "([a-surv_model][:digit:]*)_*")[,2])
 
 stable_features <- paste0(paste(#"nor_", 
-                                concordance$stable_features, "[a-z]", sep = ""), collapse = "|")
+                                concordance$stable_features, "[a-surv_model]", sep = ""), collapse = "|")
 
 # rec_data <- read_rds(paste0(here::here(), "/radiomics.rds")) %>% 
 #   filter(contrastenhancementyn == "yes") %>% 
@@ -169,7 +169,7 @@ clinical <- clinical %>%
 #   select(-mrn)
 # 
 # # Create matrix and drop NA, scale on patient
-# df2 <- t(scale(t(as.matrix(df1)))) # scale for standardizing the data to make variables comparable
+# df2 <- t(scale(t(as.matrix(df1)))) # scale for standardisurv_modeling the data to make variables comparable
 # 
 # # Create colors for cluster
 # condition_colors <- unlist(lapply(rownames(df2), function(x){
@@ -235,7 +235,7 @@ clinical <- clinical %>%
 #            lab = TRUE,
 #            title = "Correlation between radiomics features",
 #            show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
-#            # lab_col = "darkblue", lab_size = 3,
+#            # lab_col = "darkblue", lab_sisurv_modele = 3,
 #            sig.level = 0.05, #insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10,
 #            tl.cex = 10,
 #            tl.srt = 90,
@@ -284,7 +284,7 @@ clinical <- clinical %>%
 #   guide = "colourbar",
 #   aesthetics = "fill"
 # ) +
-#   theme_minimal(base_size = 16) +
+#   theme_minimal(base_sisurv_modele = 16) +
 #   labs(x="Age at Diagnosis", y="Number of Patient", title="Repartition of Age at Diagnosis")
 ```
 </div>
@@ -341,7 +341,7 @@ clinical <- clinical %>%
 #            font.y = c(20, "bold", "black"),
 #            font.legend = c(20, "bold", "black"),
 #            font.tickslab = c(18, "bold", "black"),
-#            size = 1.5,
+#            sisurv_modele = 1.5,
 # 
 #            xlab = "Time in months",
 #            legend = "top",
@@ -361,96 +361,1144 @@ clinical <- clinical %>%
 
 ***
 
-# Build a model
+# CART model
+
+## Does treatment type comes up as important?
+
+```{r}
+set.seed(1234)
+surv_model <- Surv(mldata$recurrence_time, mldata$rec_event)
+fitsurv <- rpart::rpart(surv_model ~ f65flatness + f80com_x_pxl + f85com_z_mm, data = mldata, method = "exp")
+rpart.plot(fitsurv)
+```
+Treatment type doesn't come up as predictor.
 
 ## Compare Adjuvant and Neo
-
 ```{r}
 neo <- mldata %>% filter(treatment_type == "Upfront Neoadjuvant") %>% select(-treatment_type)
 adj <-  mldata %>% filter(treatment_type == "Upfront Surgery") %>% select(-treatment_type)
-
-adj_split <- initial_split(adj, prop = 3/4)
-# Create training and testing datasets for Upfront Surgery:
-train_adj <- training(adj_split)
-test_adj  <- testing(adj_split)
 ```
 
 ### As Jaileene did
 ```{r}
-z <- Surv(adj$recurrence_time, adj$rec_event)
-z # z is dependent variable
-fitsurv <- rpart::rpart(z ~ f65flatness + f80com_x_pxl + f85com_z_mm, data = adj, method = "exp")
-fitsurv
-plot(fitsurv)
-text(fitsurv, use.n = TRUE, cex = 0.75, all = TRUE)
-rpart.plot(fitsurv)
-fancyRpartPlot(fitsurv)
-path.rpart(fitsurv, node =2)
+set.seed(1234)
+surv_model <- Surv(adj$recurrence_time, adj$rec_event)
+# surv_model # surv_model is dependent variable
+fitsurv <- rpart::rpart(surv_model ~ f65flatness + f80com_x_pxl + f85com_z_mm, data = adj, method = "exp")
+# fitsurv
+# plot(fitsurv)
+# text(fitsurv, use.n = TRUE, cex = 0.75, all = TRUE)
+# rpart.plot(fitsurv)
+# fancyRpartPlot(fitsurv)
+# path.rpart(fitsurv, node =2)
 
 # Look at CP  
-plotcp(fitsurv)
+# plotcp(fitsurv)
 printcp(fitsurv)
 
 # Update formula 
-fitsurv <- rpart(z ~ f65flatness + f80com_x_pxl + f85com_z_mm, data = adj, method = "exp", control = rpart.control( cp= 0.038, #minsplit = , minbucket = , maxdepth = , 
-                                                                                                                              xval = 10))
-fitsurv
-rpart.plot(fitsurv)
-fancyRpartPlot(fitsurv)
+set.seed(1234)
+fitsurv <- rpart(surv_model ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
+                 data = adj, 
+                 method = "exp", 
+                 control = rpart.control( cp= 0.03, 
+                                          #minsplit = , minbucket = , maxdepth = , 
+                                          xval = 10))
+# fancyRpartPlot(fitsurv)
 
-
-
-
-
-
-
-
-
-
-fit_rpart <- rpart(
-  Surv(recurrence_time, rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
-  data = mldata , method = "exp")
-
-
-# fitsurv <- rpart::rpart(z ~ f65flatness + f80com_x_pxl + f85com_z_mm, data = mldata, method = "exp")
-fit_rpart
-plot(fit_rpart)
-text(fit_rpart, use.n = TRUE, cex = 0.75, all = TRUE)
-rpart.plot(fit_rpart)
-fancyRpartPlot(fit_rpart)
-path.rpart(fit_rpart, node =2)
-
-# Look at CP  
-plotcp(fit_rpart)
-printcp(fit_rpart)
-
-# Update formula with cross val 10 fold
-fitsurv <- rpart(
-  Surv(recurrence_time, rec_event)~ f65flatness + f80com_x_pxl + f85com_z_mm, 
-  data = adj, method = "exp", 
-  control = rpart.control( cp= 0.022, #minsplit = , minbucket = , 
-                           # maxdepth = 3, 
-                           xval = 10))
-fitsurv
-rpart.plot(fitsurv)
-fancyRpartPlot(fitsurv)
-
-
-fit_rpart1 <- rpart(Surv(recurrence_time, rec_event)~ f65flatness + f80com_x_pxl + f85com_z_mm, data = neo , method = "exp")
+fitsurv_neo <- rpart(Surv(neo$recurrence_time, neo$rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
+                 data = neo, 
+                 method = "exp", 
+                 control = rpart.control( cp= 0.03, 
+                                          xval = 10))
 ```
 
+<div class = "row">
+<div class = "col-md-6">
+```{r}
+rpart.plot(fitsurv)
+
+
+adj1 <- adj %>% 
+  mutate(risk_group = fitsurv[["where"]])
+km <- survfit(surv_model ~ risk_group, data = adj1)
+ggsurvplot(km, data = adj1,
+           title = "Recurrence Analysis",
+           font.main = c(20, "bold", "black"),
+           font.x = c(18, "bold", "black"),
+           font.y = c(18, "bold", "black"),
+           font.legend = c(16, "black"),
+           font.tickslab = c(16, "bold", "black"),
+           size = 1.5,
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           pval = TRUE,
+           conf.int = FALSE,
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(ncol = 1))
+```
+</div>
+
+<div class = "col-md-6">
+```{r}
+rpart.plot(fitsurv_neo)
+
+neo1 <- neo %>% 
+  mutate(risk_group = fitsurv_neo[["where"]])
+km <- survfit(Surv(neo1$recurrence_time, neo1$rec_event) ~ risk_group, data = neo1)
+ggsurvplot(km, data = neo1,
+           title = "Recurrence Analysis",
+           font.main = c(20, "bold", "black"),
+           font.x = c(18, "bold", "black"),
+           font.y = c(18, "bold", "black"),
+           font.legend = c(16, "black"),
+           font.tickslab = c(16, "bold", "black"),
+           size = 1.5,
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           pval = TRUE,
+           conf.int = FALSE,
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(ncol = 1))
+```
+</div>
+</div>
+
+<br>
+
+### OR predict leaf
+
+```{r}
+leaf_rpart <- rpart(risk_group ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
+                 data = adj1, 
+                 # method = "exp", 
+                 control = rpart.control( cp= 0.03, 
+                                          #minsplit = , minbucket = , maxdepth = , 
+                                          xval = 10))
+rpart.plot(leaf_rpart)
+
+library(partykit)
+neo2 <- neo %>% 
+  mutate(risk_group2 = predict(as.party(leaf_rpart), newdata = neo))
+```
+
+<div class = "row">
+<div class = "col-md-6">
+```{r}
+# Plots
+km <- survfit(surv_model ~ risk_group, data = adj1)
+ggsurvplot(km, data = adj1,
+           title = "Recurrence Analysis",
+           font.main = c(20, "bold", "black"),
+           font.x = c(18, "bold", "black"),
+           font.y = c(18, "bold", "black"),
+           font.legend = c(16, "black"),
+           font.tickslab = c(16, "bold", "black"),
+           size = 1.5,
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           pval = TRUE,
+           conf.int = FALSE,
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(ncol = 1))
+```
+</div>
+
+<div class = "col-md-6">
+```{r}
+km <- survfit(Surv(neo2$recurrence_time, neo2$rec_event) ~ risk_group2, data = neo2)
+ggsurvplot(km, data = neo2,
+           title = "Recurrence Analysis",
+           font.main = c(20, "bold", "black"),
+           font.x = c(18, "bold", "black"),
+           font.y = c(18, "bold", "black"),
+           font.legend = c(16, "black"),
+           font.tickslab = c(16, "bold", "black"),
+           size = 1.5,
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           pval = TRUE,
+           conf.int = FALSE,
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(ncol = 1))
+```
+</div>
+</div>
+
+<br>
+
+# C index
+```{r}
+library(survcomp)
+a <- concordance.index(x=predict(fitsurv), surv.time = adj$recurrence_time, surv.event = adj$rec_event,
+                            method = "noether", na.rm = TRUE)
+b <- concordance.index(x=predict(fitsurv, newdata = neo), surv.time = neo$recurrence_time, surv.event = neo$rec_event,
+                            method = "noether", na.rm = TRUE)
+# tibble(training_adjuvant = c(a$c.index, a$se),
+#        testing_neoadj = c(b$c.index, b$se)) %>% kableExtra::kable()
+```
+
+
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:center;"> measurement </th>
+   <th style="text-align:center;"> training_adjuvant </th>
+   <th style="text-align:center;"> testing_neoadj </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:center;"> C index </td>
+   <td style="text-align:right;"> 0.687 </td>
+   <td style="text-align:right;">   0.531   </td>
+  </tr>
+  <tr>
+   <td style="text-align:center;"> se </td>
+   <td style="text-align:right;"> 0.034 </td>
+   <td style="text-align:right;"> 0.049 </td>
+  </tr>
+</tbody>
+</table>
+
+<br>
+
+```{r}
+# Need to use mlr3 as pec and other packages don't calculate c index for rpart
+library(mlr3verse)
+library(mlr3proba)
+
+mldata1 <- mldata %>% #drop_na() %>% 
+  select(-treatment_type)
+# mldata1$status = (mldata1$status == 2L)
+task <- TaskSurv$new("mldata1",
+                    backend = mldata1, time = "recurrence_time",
+                    event = "rec_event")
+# task_penguins = task
+# task_penguins$select(c("body_mass", "flipper_length")) # keep only these features
+# task_penguins$filter(1:3) # keep only these rows
+# task$head()
+
+learner = lrn("surv.rpart", cp = 0.03)
+# train_set = sample(task$nrow, 0.8 * task$nrow)
+# test_set = setdiff(seq_len(task$nrow), train_set)
+
+# learner$train(task, row_ids = train_set)
+# print(learner$model)
+# rattle::fancyRpartPlot(learner$model)
+# 
+# prediction = learner$predict(task, row_ids = test_set)
+# 
+# head(as.data.table(prediction)) # show first six predictions
+# 
+# task$truth()
+# task$times()
+# task$status()
+# task$unique_times()
+# task$unique_event_times()
+# task$risk_set(time = 10)
+# 
+# # library(GGally)
+# # autoplot(task)
+# 
+# measure = msr("surv.cindex") # Use crank prediction = Continuous risk ranking
+# print(measure)
+# prediction$score(measure)
+# 
+# prediction$print(measure)
+
+########################################################
+resampling = rsmp("custom")
+resampling$instantiate(task,
+                       train = list(which(mldata$treatment_type == "Upfront Surgery")),
+                       test = list(which(mldata$treatment_type == "Upfront Neoadjuvant"))
+)
+
+library(mlr3learners)
+design = benchmark_grid(
+  tasks =  task,
+  learners = lrns(c("surv.coxph", "surv.rpart", "surv.ranger"),
+                  predict_sets = c("train", "test")),
+  resamplings = resampling
+)
+
+bmr  <-  benchmark(design)
+measures = list(
+  msr("surv.cindex", predict_sets = "train", id = "cindex_adj"),
+  msr("surv.cindex", predict_sets = "test", id = "cindex_neo")
+)
+
+tab = bmr$aggregate(measures)
+print(tab[,4:8])
+library(mlr3viz)
+# autoplot(bmr) + ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+tab %>% group_by(learner_id) %>% 
+  pivot_longer(cols = c(cindex_adj, cindex_neo), names_to = "cindex", values_to = "value") %>% 
+  ggplot(aes(x= learner_id, y = value, color= cindex))+
+  geom_point()+
+  labs(x="", y="C index value")+
+  theme_minimal()
+```
+
+# But C-index may not be best to look at survival tree
+Unfortunately, most packages don't compute C-index with rpart model so I will show that with other model. What do you think?
+```{r, warning=TRUE}
+fit1 <- coxph(Surv(recurrence_time, rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm, data=adj, 
+              x=TRUE,y=TRUE)
+fit2 <- coxph(Surv(recurrence_time, rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm, data=neo, 
+              x=TRUE,y=TRUE)
+library(pec)
+a <- cindex(list("adj"=fit1,"neo"=fit2),
+                 formula=Surv(recurrence_time, rec_event)~ f65flatness + f80com_x_pxl + f85com_z_mm,
+                 data=neo, eval.times=seq(1,80,1)) 
+print(a)
+plot(a)
+```
+
+# AUC in case
+```{r}
+# Use rms
+# fitsurv #<- rpart(Surv(recurrence_time, rec_event) ~ . , data = neo)
+library("ROCR")
+pred_adj = data.frame(predict(fitsurv, newdata=adj,type = "matrix"))[,1]
+# Out_neo=data.frame()
+pred_adj=cbind(adj,pred_adj)
+pred_neo = data.frame(predict(fitsurv, newdata=neo,type = "matrix"))[,1]
+pred_neo=cbind(neo,pred_neo)
+
+#ROC
+library(survivalROC)
+roc_adj=survivalROC(Stime=pred_adj$recurrence_time, 
+                    status=pred_adj$rec_event, 
+                    marker = pred_adj$pred_adj, 
+                    predict.time =365, # For a 1 year survival
+                    method="KM")
+roc_adj$AUC
+roc_neo=survivalROC(Stime=pred_neo$recurrence_time, 
+                    status=pred_neo$rec_event, 
+                    marker = pred_neo$pred_neo, 
+                    predict.time =365, # For a 1 year survival
+                    method="KM")
+roc_neo$AUC
+
+roc_adj=survivalROC(Stime=pred_adj$recurrence_time, 
+                    status=pred_adj$rec_event, 
+                    marker = pred_adj$pred_adj,
+                    predict.time =c(10, 20, 40, 60, 80), 
+                    method="KM")
+roc_adj$AUC
+roc_neo=survivalROC(Stime=pred_neo$recurrence_time, 
+                    status=pred_neo$rec_event, 
+                    marker = pred_neo$pred_neo,
+                    predict.time =c(10, 20, 40, 60, 80), 
+                    method="KM")
+roc_neo$AUC
+
+ADJ <- tibble(true_positive_rate = roc_adj$TP,
+              false_positive_rate = roc_adj$FP)
+NEO <- tibble(true_positive_rate = roc_neo$TP,
+              false_positive_rate = roc_neo$FP)
+NEO %>% 
+  ggplot(aes(x= false_positive_rate, y= true_positive_rate))+
+  geom_line(color = "blue")+
+  geom_line(data = ADJ, color = "red")+
+  geom_abline(intercept = 0, slope = 1, linetype = 3)+
+  theme_minimal()
+```
+
+
+
+
+
+
+
+# Should I 
+
+
+
+
+```{r}
+library(riskRegression)
+# fitsurv# <- rpart(Surv(recurrence_time, rec_event)~ f65flatness + f80com_x_pxl + f85com_z_mm, data = train_adj , method = "exp")
+# fitsurv_neo# <- rpart(Surv(recurrence_time, rec_event)~ f65flatness + f80com_x_pxl + f85com_z_mm, data = neo , method = "exp")
+
+xx1 <- Score(list("adj" = fitsurv),
+            formula=Surv(recurrence_time, rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm,
+            data=adj, 
+            metrics="auc", 
+            null.model=FALSE, times=seq(5,80,5))
+
+xx2 <- Score(list("neo" = fitsurv),
+            formula=Surv(recurrence_time, rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm,
+            data=neo, 
+            metrics="auc", 
+            null.model=FALSE, times=seq(5,80,5))
+
+xx1$AUC$score %>% bind_rows(xx2$AUC$score) %>% 
+  ggplot(aes(x= times, y= AUC, color= model))+
+  geom_line()+
+  geom_errorbar(aes(ymin = AUC-se, ymax = AUC+se),
+                alpha= 0.3, width = 0.2)+
+  theme_minimal()
+
+t.test(xx1$AUC$score$AUC, xx2$AUC$score$AUC)
+
+
+library(randomForestSRC)
+fit_cox <- coxph(Surv(recurrence_time, rec_event)
+               ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
+              data = adj, 
+              na.action=na.omit, x = TRUE)
+fit_flex <- flexsurv::flexsurvreg(Surv(recurrence_time, rec_event)
+                               ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
+                              data = adj, 
+                              dist = "weibull" )
+fit_rg <- rfsrc(Surv(recurrence_time, rec_event) ~ 
+              f65flatness + f80com_x_pxl + f85com_z_mm, 
+            data=adj)
+
+xx <- Score(list("Cox" = fit_cox,
+                 "rg" = fit_rg,
+                 "flexsurv" = fit_flex,
+                 "rpart" = fitsurv), 
+            formula=Surv(recurrence_time, rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm,
+            data = neo, 
+            metrics = "auc", 
+            null.model = FALSE, 
+            times = seq(5,80,5))
+xx$AUC$score
+xx$AUC$score %>% 
+  ggplot(aes(x= times, y= AUC, color= model))+
+  geom_line()+
+  geom_errorbar(aes(ymin = AUC-se, ymax = AUC+se),
+                alpha= 0.3, width = 0.2)
+```
+
+### Cox still better
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+# library(partykit)
+# party_fit <- as.party(fitsurv)
+# predict(party_fit, newdata = adj, type = "prob")[1]
+# predict(party_fit, newdata = neo, type = "prob")[[1]]
+# 
+# # tree2 = neo_fit
+# fitsurv[["frame"]]$var
+# fitsurv[["where"]]
+# # adj_fit$frame$yval = as.numeric(rownames(adj_fit$frame))
+# # neo_fit$frame$yval = as.numeric(rownames(neo_fit$frame))
+# 
+# ############################################################################################# AUC
+# #Get the survival function value of each sample
+# Surv_value = data.frame(predict(fitsurv, newdata=adj,type = "matrix"))[,1]
+# Out_adj=data.frame()
+# Out_adj=cbind(adj,Surv_value)
+# 
+# Surv_value = data.frame(predict(fitsurv, newdata=neo,type = "matrix"))[,1]
+# Out_neo=data.frame()
+# Out_neo=cbind(neo,Surv_value)
+# 
+# library(survivalROC)
+# roc_adj=survivalROC(Stime=Out_adj$recurrence_time, status=Out_adj$rec_event, 
+#                     marker = Out_adj$Surv_value, predict.time =100, method="KM")
+# roc_neo=survivalROC(Stime=Out_neo$recurrence_time, status=Out_neo$rec_event, 
+#                     marker = Out_neo$Surv_value, predict.time =100, method="KM")
+# 
+# roc_adj$AUC #Get the AUC of ROC plot
+# roc_neo$AUC
+# 
+# wilcox.test(roc_neo$AUC, roc_adj$AUC)
+# 
+# ADJ <- tibble(true_positive_rate = roc_adj$TP,
+#               false_positive_rate = roc_adj$FP)
+# NEO <- tibble(true_positive_rate = roc_neo$TP,
+#               false_positive_rate = roc_neo$FP)
+# NEO %>% 
+#   ggplot(aes(x= false_positive_rate, y= true_positive_rate))+
+#   geom_line(color = "blue")+
+#   geom_line(data = ADJ, color = "red")+
+#   geom_abline(intercept = 0, slope = 1, linetype = 3)+
+#   theme_minimal()
+# 
+# ks.test(NEO$false_positive_rate,ADJ$false_positive_rate)
+# t.test(NEO$false_positive_rate,ADJ$false_positive_rate)
+# 
+# # library(pec) # 
+# # pec::cindex(list("adj"=roc_adj,"neo"=roc_neo),
+# #             formula=Surv(recurrence_time, rec_event)~ f65flatness + f80com_x_pxl + f85com_z_mm,
+# #             data=mldata) 
+# 
+# # library(pROC)
+# # roc.test(roc_adj, roc_neo, method="sensitivity")
+# 
+# library(ROCR)
+# # fitsurv  <- rpart(ifOperStatus ~ .,data=train,method = "class",parms = list(prior = c(0.3, 0.7)))
+# #parms = list(prior = c(0.5, 0.5)
+# #Confusion matrix
+# rpartpred <- predict(fitsurv,neo)
+# confusionMatrix(rpartpred,val$ifOperStatus)
+# prp(fitsurv, faclen = 0, cex = 0.8, extra = 1)
+# tot_count <- function(x, labs, digits, varlen)
+# {paste(labs, "\n\nn =", x$frame$n)}
+# ## Decision Tree
+# prp(fitsurv, faclen = 0, cex = 0.8, node.fun=tot_count)
+# printcp(fitsurv)
+# bestcp <- fitsurv$cptable[which.min(fitsurv$cptable[,"xerror"]),"CP"]
+# #Pruning & classification matrix of Pruning
+# pruned <- prune(fitsurv, cp = bestcp)
+# prp(pruned, faclen = 0, cex = 0.8, extra = 1)
+# predictions <- predict(pruned, neo)
+# confusionMatrix(predictions,val$ifOperStatus)
+# # bestcp <- fitsurv$cptable[which.min(fitsurv$cptable[,"xerror"]),"CP"]
+# # #Pruning & classification matrix of Pruning
+# fitsurv1 <- prune(fitsurv, cp = bestcp)
+# prp(fitsurv1, faclen = 0, cex = 0.8, extra = 1)
+# 
+# predictions <- predict(fitsurv1, neo)
+# confusionMatrix(predictions,val$ifOperStatus)
+# val1 = predict(fitsurv1, neo, type = "prob")
+# pred_val <-prediction(val1[,2],val$ifOperStatus)
+# perf_val <- performance(pred_val,"auc")
+# perf_val
+
+```
+
+
+### Split Adjuvant
 
 I think that training and testing on the same data give bias results so it is better to train on a split data set of **Upfront surgery** then test on either split testing **Upfront surgery** and testing **Upfront Chemo** and compare statistics.
-```{r}
-
-```
 
 
-
-
-## Splitting the data
+# Splitting the data
 
 The data is split in 3/4 for training and testing for better robustness.  
 A strata is applied to the split function to balance has_the_patient_recurred in both sets.  
 ```{r}
+set.seed(5678)
+adj_split <- initial_split(adj, prop = 3/4)
+# Create training and testing datasets:
+train_adj <- training(adj_split)
+test_adj  <- testing(adj_split)
 ```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+set.seed(1234)
+surv_model <- Surv(train_adj$recurrence_time, train_adj$rec_event)
+# surv_model # surv_model is dependent variable
+fitsurv <- rpart::rpart(surv_model ~ f65flatness + f80com_x_pxl + f85com_z_mm, data = train_adj, method = "exp")
+# fitsurv
+# plot(fitsurv)
+# text(fitsurv, use.n = TRUE, cex = 0.75, all = TRUE)
+# rpart.plot(fitsurv)
+# fancyRpartPlot(fitsurv)
+# path.rpart(fitsurv, node =2)
+
+# Look at CP  
+# plotcp(fitsurv)
+printcp(fitsurv)
+
+# Update formula 
+set.seed(1234)
+fitsurv <- rpart(surv_model ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
+                 data = train_adj, 
+                 method = "exp", 
+                 control = rpart.control(cp= 0.035, 
+                                         xval = 10))
+# fitsurv
+rpart.plot(fitsurv)
+# fancyRpartPlot(fitsurv)
+
+fitsurv_neo <- rpart(Surv(neo$recurrence_time, neo$rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
+                 data = neo, 
+                 method = "exp", 
+                 control = rpart.control( cp= 0.035, 
+                                          xval = 10))
+rpart.plot(fitsurv_neo)
+
+train_adj1 <- train_adj %>% 
+  mutate(risk_group = fitsurv[["where"]])
+km <- survfit(surv_model ~ risk_group, data = train_adj1)
+ggsurvplot(km, data = train_adj1,
+           title = "Recurrence Analysis",
+           font.main = c(20, "bold", "black"),
+           font.x = c(18, "bold", "black"),
+           font.y = c(18, "bold", "black"),
+           font.legend = c(16, "black"),
+           font.tickslab = c(16, "bold", "black"),
+           size = 1.5,
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           pval = TRUE,
+           conf.int = FALSE,
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(ncol = 1))
+
+neo1 <- neo %>% 
+  mutate(risk_group = fitsurv_neo[["where"]])
+km <- survfit(Surv(neo1$recurrence_time, neo1$rec_event) ~ risk_group, data = neo1)
+ggsurvplot(km, data = neo1,
+           title = "Recurrence Analysis",
+           font.main = c(20, "bold", "black"),
+           font.x = c(18, "bold", "black"),
+           font.y = c(18, "bold", "black"),
+           font.legend = c(16, "black"),
+           font.tickslab = c(16, "bold", "black"),
+           size = 1.5,
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           pval = TRUE,
+           conf.int = FALSE,
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(ncol = 1))
+```
+
+### OR predict leaf
+```{r}
+leaf_rpart <- rpart(risk_group ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
+                 data = train_adj1, 
+                 # method = "exp", 
+                 control = rpart.control( cp= 0.035, 
+                                          #minsplit = , minbucket = , maxdepth = , 
+                                          xval = 10))
+rpart.plot(leaf_rpart)
+
+library(partykit)
+neo2 <- neo %>% 
+  mutate(risk_group2 = predict(as.party(leaf_rpart), newdata = neo))
+
+# Plots
+km <- survfit(surv_model ~ risk_group, data = train_adj1)
+ggsurvplot(km, data = train_adj1,
+           title = "Recurrence Analysis",
+           font.main = c(20, "bold", "black"),
+           font.x = c(18, "bold", "black"),
+           font.y = c(18, "bold", "black"),
+           font.legend = c(16, "black"),
+           font.tickslab = c(16, "bold", "black"),
+           size = 1.5,
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           pval = TRUE,
+           conf.int = FALSE,
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(ncol = 1))
+
+km <- survfit(Surv(neo2$recurrence_time, neo2$rec_event) ~ risk_group2, data = neo2)
+ggsurvplot(km, data = neo2,
+           title = "Recurrence Analysis",
+           font.main = c(20, "bold", "black"),
+           font.x = c(18, "bold", "black"),
+           font.y = c(18, "bold", "black"),
+           font.legend = c(16, "black"),
+           font.tickslab = c(16, "bold", "black"),
+           size = 1.5,
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           pval = TRUE,
+           conf.int = FALSE,
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(ncol = 1))
+```
+
+# C index
+```{r}
+library(survcomp)
+a <- concordance.index(x=predict(fitsurv), surv.time = train_adj$recurrence_time, surv.event = train_adj$rec_event,
+                            method = "noether", na.rm = TRUE)
+b <- concordance.index(x=predict(fitsurv, newdata = neo), surv.time = neo$recurrence_time, surv.event = neo$rec_event,
+                            method = "noether", na.rm = TRUE)
+```
+
+
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:center;"> measurement </th>
+   <th style="text-align:center;"> training_train_adjuvant </th>
+   <th style="text-align:center;"> testing_neoadj </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:center;"> C index </td>
+   <td style="text-align:right;"> 0.687 </td>
+   <td style="text-align:right;">   0.531   </td>
+  </tr>
+  <tr>
+   <td style="text-align:center;"> se </td>
+   <td style="text-align:right;"> 0.034 </td>
+   <td style="text-align:right;"> 0.049 </td>
+  </tr>
+</tbody>
+</table>
+
+<br>
+
+```{r}
+# Need to use mlr3 as pec and other packages don't calculate c index for rpart
+# library(mlr3verse)
+# library(mlr3proba)
+
+mldata <- bind_rows(train_adj %>% 
+                       mutate(data = "train_adj"),
+                     test_adj %>% 
+                       mutate(data = "test_adj"),
+                     neo %>% 
+                       mutate(data = "neo"),
+                     )
+mldata1 <- mldata %>% 
+  select(-data)
+# mldata1$status = (mldata1$status == 2L)
+task <- TaskSurv$new("mldata1",
+                    backend = mldata1, time = "recurrence_time",
+                    event = "rec_event")
+# task_penguins = task
+# task_penguins$select(c("body_mass", "flipper_length")) # keep only these features
+# task_penguins$filter(1:3) # keep only these rows
+# task$head()
+
+learner = lrn("surv.rpart", cp = 0.03)
+
+# learner$model
+
+# train_set = sample(task$nrow, 0.8 * task$nrow)
+# test_set = setdiff(seq_len(task$nrow), train_set)
+
+# learner$train(task, row_ids = train_set)
+# print(learner$model)
+# rattle::fancyRpartPlot(learner$model)
+# 
+# prediction = learner$predict(task, row_ids = test_set)
+# 
+# head(as.data.table(prediction)) # show first six predictions
+# 
+# task$truth()
+# task$times()
+# task$status()
+# task$unique_times()
+# task$unique_event_times()
+# task$risk_set(time = 10)
+# 
+# # library(GGally)
+# # autoplot(task)
+# 
+# measure = msr("surv.cindex") # Use crank prediction = Continuous risk ranking
+# print(measure)
+# prediction$score(measure)
+# 
+# prediction$print(measure)
+
+########################################################
+resampling = rsmp("custom")
+resampling$instantiate(task,
+                       train = list(which(mldata$data == "train_adj")),
+                       test = list(which(mldata$data == "test_adj"))
+)
+
+# library(mlr3learners)
+design = benchmark_grid(
+  tasks =  task,
+  learners = lrns(c("surv.coxph", "surv.rpart", "surv.ranger"),
+                  predict_sets = c("train", "test")),
+  resamplings = resampling
+)
+
+bmr = benchmark(design)
+measures = list(
+  msr("surv.cindex", predict_sets = "train", id = "cindex_train_adj"),
+  msr("surv.cindex", predict_sets = "test", id = "cindex_test_adj")
+)
+
+tab1 = bmr$aggregate(measures)
+print(tab1[,4:8])
+
+tab1 %>% group_by(learner_id) %>% 
+  pivot_longer(cols = c(cindex_train_adj, cindex_test_adj), names_to = "cindex", values_to = "value") %>% 
+  ggplot(aes(x= learner_id, y = value, color= cindex))+
+  geom_point()+
+  labs(x="", y="C index value")+
+  theme_minimal()
+########
+resampling = rsmp("custom")
+resampling$instantiate(task,
+                       train = list(which(mldata$data == "train_adj")),
+                       test = list(which(mldata$data == "neo"))
+)
+
+design = benchmark_grid(
+  tasks =  task,
+  learners = lrns(c("surv.coxph", "surv.rpart", "surv.ranger"),
+                  predict_sets = c("train", "test")),
+  resamplings = resampling
+)
+
+bmr = benchmark(design)
+measures = list(
+  msr("surv.cindex", predict_sets = "train", id = "cindex_train_adj"),
+  msr("surv.cindex", predict_sets = "test", id = "cindex_neo")
+)
+
+tab2 = bmr$aggregate(measures)
+print(tab2[,4:8])
+tab2 %>% group_by(learner_id) %>% 
+  pivot_longer(cols = c(cindex_train_adj, cindex_neo), names_to = "cindex", values_to = "value") %>% 
+  bind_rows(., tab1 %>% pivot_longer(cols = cindex_test_adj, names_to = "cindex", values_to = "value")) %>% 
+  ggplot(aes(x= learner_id, y = value, color= cindex))+
+  geom_point()+
+  labs(x="", y="C index value")+
+  theme_minimal()
+```
+
+# AUC in case
+```{r}
+# Use rms
+# fitsurv #<- rpart(Surv(recurrence_time, rec_event) ~ . , data = neo)
+# library("ROCR")
+pred_train_adj = data.frame(predict(fitsurv, newdata=train_adj,type = "matrix"))[,1]
+# Out_neo=data.frame()
+pred_train_adj=cbind(train_adj,pred_train_adj)
+pred_test_adj = data.frame(predict(fitsurv, newdata=test_adj,type = "matrix"))[,1]
+pred_test_adj=cbind(test_adj,pred_test_adj)
+pred_neo = data.frame(predict(fitsurv, newdata=neo,type = "matrix"))[,1]
+pred_neo=cbind(neo,pred_neo)
+
+#ROC
+# library(survivalROC)
+roc_train_adj=survivalROC(Stime=pred_train_adj$recurrence_time, 
+                    status=pred_train_adj$rec_event, 
+                    marker = pred_train_adj$pred_train_adj, 
+                    predict.time =365, # For a 1 year survival
+                    method="KM")
+roc_train_adj$AUC
+roc_test_adj=survivalROC(Stime=pred_test_adj$recurrence_time, 
+                    status=pred_test_adj$rec_event, 
+                    marker = pred_test_adj$pred_test_adj, 
+                    predict.time =365, # For a 1 year survival
+                    method="KM")
+roc_test_adj$AUC
+roc_neo=survivalROC(Stime=pred_neo$recurrence_time, 
+                    status=pred_neo$rec_event, 
+                    marker = pred_neo$pred_neo, 
+                    predict.time =365, # For a 1 year survival
+                    method="KM")
+roc_neo$AUC
+
+roc_train_adj=survivalROC(Stime=pred_train_adj$recurrence_time, 
+                    status=pred_train_adj$rec_event, 
+                    marker = pred_train_adj$pred_train_adj,
+                    predict.time =c(10, 20, 40, 60, 80), 
+                    method="KM")
+roc_train_adj$AUC
+roc_test_adj=survivalROC(Stime=pred_test_adj$recurrence_time, 
+                    status=pred_test_adj$rec_event, 
+                    marker = pred_test_adj$pred_test_adj,
+                    predict.time =c(10, 20, 40, 60, 80), 
+                    method="KM")
+roc_test_adj$AUC
+roc_neo=survivalROC(Stime=pred_neo$recurrence_time, 
+                    status=pred_neo$rec_event, 
+                    marker = pred_neo$pred_neo,
+                    predict.time =c(10, 20, 40, 60, 80), 
+                    method="KM")
+roc_neo$AUC
+
+train_ADJ <- tibble(true_positive_rate = roc_train_adj$TP,
+              false_positive_rate = roc_train_adj$FP)
+test_ADJ <- tibble(true_positive_rate = roc_test_adj$TP,
+              false_positive_rate = roc_test_adj$FP)
+NEO <- tibble(true_positive_rate = roc_neo$TP,
+              false_positive_rate = roc_neo$FP)
+NEO %>% 
+  ggplot(aes(x= false_positive_rate, y= true_positive_rate))+
+  geom_line(color = "blue")+
+  geom_line(data = train_ADJ, color = "red")+
+  geom_line(data = test_ADJ, color = "green")+
+  geom_abline(intercept = 0, slope = 1, linetype = 3)+
+  theme_minimal()
+```
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+library(riskRegression)
+fitsurv# <- rpart(Surv(recurrence_time, rec_event)~ f65flatness + f80com_x_pxl + f85com_z_mm, data = train_adj , method = "exp")
+# fitsurv_neo# <- rpart(Surv(recurrence_time, rec_event)~ f65flatness + f80com_x_pxl + f85com_z_mm, data = neo , method = "exp")
+
+xx1 <- Score(list("train_adj" = fitsurv),
+            formula=Surv(recurrence_time, rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm,
+            data=train_adj, 
+            metrics="auc", 
+            null.model=FALSE, times=seq(5,80,5))
+xx2 <- Score(list("test_adj" = fitsurv),
+            formula=Surv(recurrence_time, rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm,
+            data=test_adj, 
+            metrics="auc", 
+            null.model=FALSE, times=seq(5,80,5))
+xx3 <- Score(list("neo" = fitsurv),
+            formula=Surv(recurrence_time, rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm,
+            data=neo, 
+            metrics="auc", 
+            null.model=FALSE, times=seq(5,80,5))
+
+xx1$AUC$score %>% bind_rows(xx2$AUC$score, xx3$AUC$score) %>% 
+  ggplot(aes(x= times, y= AUC, color= model))+
+  geom_line()+
+  geom_errorbar(aes(ymin = AUC-se, ymax = AUC+se),
+                alpha= 0.3, width = 0.2)
+
+t.test(xx2$AUC$score$AUC, xx3$AUC$score$AUC)
+
+
+library(randomForestSRC)
+fit_cox <- coxph(Surv(recurrence_time, rec_event)
+               ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
+              data = train_adj, 
+              na.action=na.omit, x = TRUE)
+fit_flex <- flexsurv::flexsurvreg(Surv(recurrence_time, rec_event)
+                               ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
+                              data = train_adj, 
+                              dist = "weibull" )
+fit_rg <- rfsrc(Surv(recurrence_time, rec_event) ~ 
+              f65flatness + f80com_x_pxl + f85com_z_mm, 
+            data=train_adj)
+
+xx <- Score(list("Cox" = fit_cox,
+                 "rg" = fit_rg,
+                 "flexsurv" = fit_flex,
+                 "rpart" = fitsurv), 
+            formula=Surv(recurrence_time, rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm,
+            data = neo, 
+            metrics = "auc", 
+            null.model = FALSE, 
+            times = seq(5,80,5))
+# xx$AUC$score
+xx$AUC$score %>% 
+  ggplot(aes(x= times, y= AUC, color= model))+
+  geom_line()+
+  geom_errorbar(aes(ymin = AUC-se, ymax = AUC+se),
+                alpha= 0.3, width = 0.2)
+```
+
+### Cox and flexsurv still better
+
+
+# Compare performance with binary prediction
+
+
+```{r}
+rf_results <- read_rds(paste0(here::here(), "/rf_results.rds"))
+xgboost_results <- read_rds(paste0(here::here(), "/xgboost_results.rds"))
+tree_results <- read_rds(paste0(here::here(), "/tree_results.rds"))
+kknn_results <- read_rds(paste0(here::here(), "/kknn_results.rds"))
+glmnet_results <- read_rds(paste0(here::here(), "/glmnet_results.rds"))
+```
+
+
+
+
+
+<div class = "row">
+<div class = "col-md-6">
+```{r}
+rf_results %>% # Compare both models
+  collect_predictions() %>% 
+  mutate(model = "rf") %>% 
+  bind_rows(glmnet_results %>% 
+              collect_predictions() %>% 
+              mutate(model = "glmet")) %>% 
+  bind_rows(xgboost_results %>% 
+              collect_predictions() %>% 
+              mutate(model = "xgboost")) %>% 
+  bind_rows(tree_results %>% 
+              collect_predictions() %>% 
+              mutate(model = "tree")) %>% 
+  bind_rows(kknn_results %>% 
+              collect_predictions() %>% 
+              mutate(model = "kknn")) %>% 
+  group_by(model) %>% 
+  roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+  autoplot()
+```
+</div>
+
+<div class = "col-md-6">
+```{r}
+NEO %>% 
+  ggplot(aes(x= false_positive_rate, y= true_positive_rate))+
+  geom_line(color = "blue")+
+  geom_line(data = train_ADJ, color = "red")+
+  geom_line(data = test_ADJ, color = "green")+
+  geom_abline(intercept = 0, slope = 1, linetype = 3)+
+  theme_minimal()
+```
+</div>
+</div>
+
+```{r}
+# rf_results %>% # Compare both models
+#   collect_predictions() %>% 
+#   mutate(model = "rf") %>% 
+#   bind_rows(glmnet_results %>% 
+#               collect_predictions() %>% 
+#               mutate(model = "glmet")) %>% 
+#   bind_rows(xgboost_results %>% 
+#               collect_predictions() %>% 
+#               mutate(model = "xgboost")) %>% 
+#   bind_rows(tree_results %>% 
+#               collect_predictions() %>% 
+#               mutate(model = "tree")) %>% 
+#   bind_rows(kknn_results %>% 
+#               collect_predictions() %>% 
+#               mutate(model = "kknn")) %>% 
+#   group_by(model) %>% 
+#   roc_curve(has_the_patient_recurred, .pred_Recurrence) %>% 
+#   ggplot(aes(x= 1-specificity, y= sensitivity, color = model))+
+#   geom_line()
+
+
+# library(partykit)
+# party_fit <- as.party(fitsurv)
+# predict(party_fit, newdata = adj, type = "prob")[1]
+# predict(party_fit, newdata = neo, type = "prob")[[1]]
+# 
+# # tree2 = neo_fit
+# fitsurv[["frame"]]$var
+# fitsurv[["where"]]
+# # adj_fit$frame$yval = as.numeric(rownames(adj_fit$frame))
+# # neo_fit$frame$yval = as.numeric(rownames(neo_fit$frame))
+# 
+# ############################################################################################# AUC
+# #Get the survival function value of each sample
+# Surv_value = data.frame(predict(fitsurv, newdata=adj,type = "matrix"))[,1]
+# Out_adj=data.frame()
+# Out_adj=cbind(adj,Surv_value)
+# 
+# Surv_value = data.frame(predict(fitsurv, newdata=neo,type = "matrix"))[,1]
+# Out_neo=data.frame()
+# Out_neo=cbind(neo,Surv_value)
+# 
+# library(survivalROC)
+# roc_adj=survivalROC(Stime=Out_adj$recurrence_time, status=Out_adj$rec_event, 
+#                     marker = Out_adj$Surv_value, predict.time =100, method="KM")
+# roc_neo=survivalROC(Stime=Out_neo$recurrence_time, status=Out_neo$rec_event, 
+#                     marker = Out_neo$Surv_value, predict.time =100, method="KM")
+# 
+# roc_adj$AUC #Get the AUC of ROC plot
+# roc_neo$AUC
+# 
+# wilcox.test(roc_neo$AUC, roc_adj$AUC)
+# 
+# ADJ <- tibble(true_positive_rate = roc_adj$TP,
+#               false_positive_rate = roc_adj$FP)
+# NEO <- tibble(true_positive_rate = roc_neo$TP,
+#               false_positive_rate = roc_neo$FP)
+# NEO %>% 
+#   ggplot(aes(x= false_positive_rate, y= true_positive_rate))+
+#   geom_line(color = "blue")+
+#   geom_line(data = ADJ, color = "red")+
+#   geom_abline(intercept = 0, slope = 1, linetype = 3)+
+#   theme_minimal()
+# 
+# ks.test(NEO$false_positive_rate,ADJ$false_positive_rate)
+# t.test(NEO$false_positive_rate,ADJ$false_positive_rate)
+# 
+# # library(pec) # 
+# # pec::cindex(list("adj"=roc_adj,"neo"=roc_neo),
+# #             formula=Surv(recurrence_time, rec_event)~ f65flatness + f80com_x_pxl + f85com_z_mm,
+# #             data=mldata) 
+# 
+# # library(pROC)
+# # roc.test(roc_adj, roc_neo, method="sensitivity")
+# 
+# library(ROCR)
+# # fitsurv  <- rpart(ifOperStatus ~ .,data=train,method = "class",parms = list(prior = c(0.3, 0.7)))
+# #parms = list(prior = c(0.5, 0.5)
+# #Confusion matrix
+# rpartpred <- predict(fitsurv,neo)
+# confusionMatrix(rpartpred,val$ifOperStatus)
+# prp(fitsurv, faclen = 0, cex = 0.8, extra = 1)
+# tot_count <- function(x, labs, digits, varlen)
+# {paste(labs, "\n\nn =", x$frame$n)}
+# ## Decision Tree
+# prp(fitsurv, faclen = 0, cex = 0.8, node.fun=tot_count)
+# printcp(fitsurv)
+# bestcp <- fitsurv$cptable[which.min(fitsurv$cptable[,"xerror"]),"CP"]
+# #Pruning & classification matrix of Pruning
+# pruned <- prune(fitsurv, cp = bestcp)
+# prp(pruned, faclen = 0, cex = 0.8, extra = 1)
+# predictions <- predict(pruned, neo)
+# confusionMatrix(predictions,val$ifOperStatus)
+# # bestcp <- fitsurv$cptable[which.min(fitsurv$cptable[,"xerror"]),"CP"]
+# # #Pruning & classification matrix of Pruning
+# fitsurv1 <- prune(fitsurv, cp = bestcp)
+# prp(fitsurv1, faclen = 0, cex = 0.8, extra = 1)
+# 
+# predictions <- predict(fitsurv1, neo)
+# confusionMatrix(predictions,val$ifOperStatus)
+# val1 = predict(fitsurv1, neo, type = "prob")
+# pred_val <-prediction(val1[,2],val$ifOperStatus)
+# perf_val <- performance(pred_val,"auc")
+# perf_val
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

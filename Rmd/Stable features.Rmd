@@ -216,9 +216,9 @@ ICC and CCC values are similar : ICC is more tolerant in its classification of "
 The following table is saved at   
 smb://hlm/data/project/Peres_Research/Ovarian - Radiomics/Christelle/stable features/concordance CCC and ICC.csv
 ```{r concordance}
-concordance <- full_join(CCC_data, ICC_data, by = "name", suffix = c("_CCC", "_ICC")) %>% arrange(desc(value_ICC)) %>% 
+concordanceCCC <- full_join(CCC_data, ICC_data, by = "name", suffix = c("_CCC", "_ICC")) %>% arrange(desc(value_ICC)) %>% 
   select(value_ICC, reliability_ICC, value_CCC, reliability_CCC, name)
-concordance
+concordanceCCC
 # write_csv(concordance, paste0(path, "/stable features/concordance CCC and ICC.csv"))
 ```
 <br>
@@ -228,16 +228,20 @@ concordance
 # `r NROW(concordance %>% filter(value_CCC >= 0.95) %>% select(feature = name))` Stable Features with CCC ≥ 0.95
 <font size="10"> `r  emo::ji("party_popper")``r  emo::ji("balloon")``r  emo::ji("clinking_glasses")``r  emo::ji("confetti")`</font> 
 ```{r, rows.print=75}
-concordance %>% filter(value_CCC >= 0.95) %>% select(feature = name)
+concordanceCCC %>% filter(value_CCC >= 0.95) %>% select(feature = name)
+# write_rds(concordanceCCC, "concordanceCCC.rds")
 ```
 
 ```{r}
-concordance <- data.frame(namee = c("f1statistical_m", "f2statistical_v", "f16statistical_",
+concordance_cor <- data.frame(namee = c("f1statistical_m", "f2statistical_v", "f16statistical_",
                                     "f37intensity_hi", "f41minimum_hist", "f59centre_of_ma", 
                                     "f65flatness", "f80com_x_pxl", "f81com_y_pxl", "f82com_z_pxl",
                                     "f83com_x_mm", 'f85com_z_mm', 'f87weighted_com', 'f109avgcoocurre', 
                                     "f110avgcoocurre", "f113avgcoocurre", "f117avg_3d_sre_", "f139glszm_large",
                                     "f144glszm_zone_"))
+# write_rds(concordance_cor, "concordance_cor.rds")
+
+concordance <- data.frame(namee = c("f65flatness", "f80com_x_pxl", 'f85com_z_mm'))
 # write_rds(concordance, "concordance.rds")
 ```
 
