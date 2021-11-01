@@ -35,11 +35,11 @@ knitr::opts_chunk$set(echo = FALSE,
                       fig.align='center'#, fig.show='hold'
                       )
 # options(gtsummary.print_engine = "gt")
-# options(gtsummary.as_gt.addl_cmds = "gt::tab_options(table.font.sisurv_modele = 14, data_row.padding = gt::px(1))")
+# options(gtsummary.as_gt.addl_cmds = "gt::tab_options(table.font.size = 14, data_row.padding = gt::px(1))")
 ```
 
 <style>
-div.blue { background-color:#FF9966; border-radius: 5px; padding: 20px; font-sisurv_modele: 38px}
+div.blue { background-color:#FF9966; border-radius: 5px; padding: 20px; font-size: 38px}
 </style>
 <div class = "blue">
 
@@ -51,7 +51,7 @@ div.blue { background-color:#FF9966; border-radius: 5px; padding: 20px; font-sis
 ```{r library}
 library(tidyverse)
 library(tidymodels)
-# library(dotwhisker)  # for visualisurv_modeling regression results
+# library(dotwhisker)  # for visualizing regression results
 # library(themis)
 library(gtsummary)
 # library(gplots)
@@ -128,7 +128,7 @@ tbl1 <- rec_data %>% select(matches("^f[0-9]"), rec_event, recurrence_time) %>%
 tbl1
 
 concordance <- tbl1$table_body %>% filter(p.value < 0.1) %>% select(variable, p.value) %>%
-  mutate(stable_features = str_match(variable, "([a-surv_model][:digit:]*)_*")[,2])
+  mutate(stable_features = str_match(variable, "([a-z][:digit:]*)_*")[,2])
 more_concordance <- concordance[, 1:2]
 more_concordance
 ```
@@ -136,10 +136,10 @@ more_concordance
 
 ```{r mldata}
 concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance.rds") %>% 
-  mutate(stable_features = str_match(namee, "([a-surv_model][:digit:]*)_*")[,2])
+  mutate(stable_features = str_match(namee, "([a-z][:digit:]*)_*")[,2])
 
 stable_features <- paste0(paste(#"nor_", 
-                                concordance$stable_features, "[a-surv_model]", sep = ""), collapse = "|")
+                                concordance$stable_features, "[a-z]", sep = ""), collapse = "|")
 
 # rec_data <- read_rds(paste0(here::here(), "/radiomics.rds")) %>% 
 #   filter(contrastenhancementyn == "yes") %>% 
@@ -171,7 +171,7 @@ clinical <- clinical %>%
 #   select(-mrn)
 # 
 # # Create matrix and drop NA, scale on patient
-# df2 <- t(scale(t(as.matrix(df1)))) # scale for standardisurv_modeling the data to make variables comparable
+# df2 <- t(scale(t(as.matrix(df1)))) # scale for standardizing the data to make variables comparable
 # 
 # # Create colors for cluster
 # condition_colors <- unlist(lapply(rownames(df2), function(x){
@@ -237,7 +237,7 @@ clinical <- clinical %>%
 #            lab = TRUE,
 #            title = "Correlation between radiomics features",
 #            show.legend = TRUE, legend.title = "Correlation", show.diag = TRUE,
-#            # lab_col = "darkblue", lab_sisurv_modele = 3,
+#            # lab_col = "darkblue", lab_size = 3,
 #            sig.level = 0.05, #insig = c("pch", "blank"), pch = 4, pch.col = "black", pch.cex = 10,
 #            tl.cex = 10,
 #            tl.srt = 90,
@@ -286,7 +286,7 @@ rec_data %>%
 #   guide = "colourbar",
 #   aesthetics = "fill"
 # ) +
-#   theme_minimal(base_sisurv_modele = 16) +
+#   theme_minimal(base_size = 16) +
 #   labs(x="Age at Diagnosis", y="Number of Patient", title="Repartition of Age at Diagnosis")
 ```
 <!-- </div> -->
@@ -343,7 +343,7 @@ ggsurvplot(myplot, data = rec_data,
            font.y = c(20, "bold", "black"),
            font.legend = c(20, "bold", "black"),
            font.tickslab = c(18, "bold", "black"),
-           sisurv_modele = 1.5,
+           size = 1.5,
 
            xlab = "Time in months",
            legend = "top",
@@ -357,6 +357,12 @@ ggsurvplot(myplot, data = rec_data,
            # Censor
            censor = TRUE
 ) + guides(colour = guide_legend(nrow = 4))
+
+rec_data %>%
+  # full_join(., clinical) %>%
+  select(age_at_diagnosis, tnm_cs_mixed_group_stage, treatment_type, raceeth, debulking_status) %>%
+  tbl_summary(by = debulking_status) %>%
+  bold_labels() %>% add_p(test.args = tnm_cs_mixed_group_stage ~ list(workspace=2e9)) %>% bold_p(t = 0.05)
 ```
 <br>
 
@@ -902,7 +908,7 @@ The data is split in 3/4 for training and testing for better robustness.
 A strata is applied to the split function to balance has_the_patient_recurred in both sets.  
 ```{r}
 set.seed(5678)
-adj_split <- initial_split(adj, prop = 3/4)
+adj_split <- initial_split(adj, prop = 1/2)
 # Create training and testing datasets:
 train_adj <- training(adj_split)
 test_adj  <- testing(adj_split)
@@ -942,7 +948,7 @@ set.seed(1234)
 fitsurv <- rpart(surv_model ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
                  data = train_adj, 
                  method = "exp", 
-                 control = rpart.control(cp= 0.035, 
+                 control = rpart.control(cp= 0.041, 
                                          xval = 10))
 # fitsurv
 rpart.plot(fitsurv)
@@ -974,7 +980,7 @@ ggsurvplot(km, data = train_adj1,
 fitsurv_neo <- rpart(Surv(neo$recurrence_time, neo$rec_event) ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
                  data = neo, 
                  method = "exp", 
-                 control = rpart.control( cp= 0.035, 
+                 control = rpart.control( cp= 0.041, 
                                           xval = 10))
 rpart.plot(fitsurv_neo)
 
@@ -1009,7 +1015,7 @@ Upfront surgery CART
 leaf_rpart <- rpart(risk_group ~ f65flatness + f80com_x_pxl + f85com_z_mm, 
                  data = train_adj1, 
                  # method = "exp", 
-                 control = rpart.control( cp= 0.035, 
+                 control = rpart.control( cp= 0.021, 
                                           #minsplit = , minbucket = , maxdepth = , 
                                           xval = 10))
 rpart.plot(leaf_rpart)
@@ -1017,6 +1023,8 @@ rpart.plot(leaf_rpart)
 library(partykit)
 neo2 <- neo %>% 
   mutate(risk_group2 = predict(as.party(leaf_rpart), newdata = neo))
+test_adj1 <- test_adj %>% 
+  mutate(risk_group2 = predict(as.party(leaf_rpart), newdata = test_adj))
 ```
 
 <div class = "row">
@@ -1025,7 +1033,25 @@ neo2 <- neo %>%
 # Plots
 km <- survfit(surv_model ~ risk_group, data = train_adj1)
 ggsurvplot(km, data = train_adj1,
-           title = "Recurrence Analysis",
+           title = "Recurrence Analysis on training set \nupfront surgery",
+           font.main = c(20, "bold", "black"),
+           font.x = c(18, "bold", "black"),
+           font.y = c(18, "bold", "black"),
+           font.legend = c(16, "black"),
+           font.tickslab = c(16, "bold", "black"),
+           size = 1.5,
+           xlab = "Time in months",
+           legend = "top",
+           legend.title = "",
+           pval = TRUE,
+           conf.int = FALSE,
+           # Censor
+           censor = TRUE
+) + guides(colour = guide_legend(ncol = 1))
+
+km <- survfit(Surv(test_adj1$recurrence_time, test_adj1$rec_event) ~ risk_group2, data = test_adj1)
+ggsurvplot(km, data = test_adj1,
+           title = "Recurrence Analysis on testing set \nupfront surgery",
            font.main = c(20, "bold", "black"),
            font.x = c(18, "bold", "black"),
            font.y = c(18, "bold", "black"),
@@ -1047,7 +1073,7 @@ ggsurvplot(km, data = train_adj1,
 ```{r}
 km <- survfit(Surv(neo2$recurrence_time, neo2$rec_event) ~ risk_group2, data = neo2)
 ggsurvplot(km, data = neo2,
-           title = "Recurrence Analysis",
+           title = "Recurrence Analysis on testing set \nupfront neoadjuvant",
            font.main = c(20, "bold", "black"),
            font.x = c(18, "bold", "black"),
            font.y = c(18, "bold", "black"),
