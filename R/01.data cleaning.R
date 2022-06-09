@@ -176,15 +176,22 @@ clinical <- clinical %>%
   #   somatic_brca2_mutation == "No"           ~ "No",
   #   TRUE                                     ~ "Unknown"
   # ))
-
-  mutate(date_of_first_adjuvant_chemother = as.POSIXct(date_of_first_adjuvant_chemother, format = "%m/%d/%y")) %>% 
+  mutate(date_of_first_adjuvant_chemother = case_when(
+    str_detect(date_of_first_adjuvant_chemother, "/....")    
+    ~ as.Date(
+      as.POSIXct(format(
+        as.Date(date_of_first_adjuvant_chemother, format="%m/%d/%Y")
+        , "%m/%d/%y"), 
+        format = "%m/%d/%y")),
+    TRUE ~ as.Date(as.numeric(date_of_first_adjuvant_chemother),
+              origin = "1899-12-30")
+  )) %>% 
   # mutate(debulking_status = case_when(
   #   debulking_status == "Incomplete Records"    ~ NA_character_,
   #   TRUE                                        ~ debulking_status
   # )) %>% 
   # left_join(ID_linkage, ., by = "mrn") %>% 
-  select(#-mrn, 
-    -c(moffitt_patient, summary_of_rx_1st_course, summary_of_rx_1st_course_at_t, subject_number))
+  select(-c(moffitt_patient, summary_of_rx_1st_course, summary_of_rx_1st_course_at_t, subject_number))
 
 clinical_var <- function(data) {
   data <- data %>% 
