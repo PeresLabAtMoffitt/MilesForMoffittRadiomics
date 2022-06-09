@@ -57,7 +57,7 @@ library(plotly)
 <br>
 
 ```{r load test-retest}
-path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
+path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics", "Miles for Moffitt")
 
 first_seg <- read_csv(paste0(path,
   "/data/Test retest stable features/Ovarian_Radiomics_Features_TestRetest_first segmentation.csv")) %>%

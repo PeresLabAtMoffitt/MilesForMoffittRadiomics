@@ -49,10 +49,10 @@ library(themis)
 
 
 ```{r load}
-clinical <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/clinical.rds") %>% 
+clinical <- read_rds(paste0(here::here(), "/clinical.rds")) %>% 
   select(mrn, has_the_patient_recurred, w_wo_contrast)
 
-concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/concordance.rds") %>% 
+concordance <- read_rds(paste0(here::here(), "/concordance.rds")) %>% 
   filter(value_CCC >= 0.95) %>% 
   select(name) %>% 
   mutate(stable_features = str_match(name, "([a-z][:digit:]*)_*")[,2])
@@ -60,7 +60,7 @@ concordance <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittR
 stable_features <- paste0(paste(#"nor_", 
                                 concordance$stable_features, "[a-z]", sep = ""), collapse = "|")
 
-mldata <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/radiomics.rds") %>% 
+mldata <- read_rds(paste0(here::here(), "/radiomics.rds")) %>% 
   select(mrn, matches(stable_features)) %>% 
   right_join(., clinical, by = "mrn") %>% 
   filter(!is.na(.[2]))

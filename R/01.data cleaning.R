@@ -2,16 +2,16 @@
 library(tidyverse)
 # library(scales)
 library(lubridate)
-library(data.table)
-library(gtsummary)
-library(gplots)
-library(heatmap.plus)
-library(RColorBrewer)
-library(psych)
+# library(data.table)
+# library(gtsummary)
+# library(gplots)
+# library(heatmap.plus)
+# library(RColorBrewer)
+# library(psych)
 # library(corrplot)
-library(ggcorrplot)
-library(survival)
-library(survminer)
+# library(ggcorrplot)
+# library(survival)
+# library(survminer)
 
 capwords <- function(s, strict = FALSE) {
   cap <- function(s) paste(toupper(substring(s, 1, 1)),
@@ -40,7 +40,7 @@ capwords <- function(s, strict = FALSE) {
 #   left_join(ID_linkage, ., by = "mrn") %>% select(-mrn)
 # colnames(features)[54]
 
-path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics")
+path <- fs::path("", "Volumes", "Peres_Research", "Ovarian - Radiomics", "Miles for Moffitt")
 features <-
   read_csv(paste0(path, "/data/analysis dataset/Clinical_normradiomics_08182021.csv")) %>% 
   drop_na(lesionid) %>% 
@@ -52,7 +52,7 @@ contrast_info <- features %>%
 
 clinical <- readxl::read_xlsx(
   paste0(path,
-         "/data/analysis dataset/radiomic_CT_final_v3.xlsx"))
+         "/data/analysis dataset/radiomic_CT_modif_06092022.xlsx"))
 
 
 ################################################################################################# II ### Features----

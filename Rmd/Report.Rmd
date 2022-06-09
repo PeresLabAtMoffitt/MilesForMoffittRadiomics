@@ -63,7 +63,7 @@ library(survminer)
 ## I.Radiomics
 
 ```{r radiomics}
-radiomics <- read_rds("/Users/colinccm/Documents/GitHub/Peres/MilesForMoffittRadiomics/radiomics.rds")
+radiomics <- read_rds(paste0(here::here(), "/radiomics.rds"))
 features <- radiomics %>% 
   select(mrn, lesionid, starts_with("nor"))
 # class(features) <- "data.frame"
