@@ -19,6 +19,6 @@ radiogenomics_pilot_study <- contrast %>%
   left_join(., 
             clinical %>% 
               select(mrn, date_of_diagnosis, date_of_first_neoadjuvant_chemot, date_of_first_adjuvant_chemother,
-                     first_chemo_date))
+                     date_of_first_surgery))
 
 write_csv(radiogenomics_pilot_study, "ids for radiogenomics pilot study.csv")
