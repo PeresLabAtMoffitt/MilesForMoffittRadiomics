@@ -81,20 +81,35 @@ clinical <- clinical %>%
   # Remove low grade - well differentiated cases
   filter(grade_differentiation != "Well Differentiated" | is.na(grade_differentiation)) %>% 
   filter(str_detect(treatment_type, "Upfront")) %>%
-  # rename(race = "race", ethnicity = "ethnicity") %>%
+  mutate(year_of_diagnosis = factor(year_of_diagnosis)) %>% 
+  mutate(grade_differentiation = case_when(
+    grade_differentiation == "Not Determined Or Na"      ~ NA_character_,
+    !is.na(grade_differentiation)                        ~ grade_differentiation
+  )) %>% 
+  mutate(debulking_status =
+           str_remove(debulking_status,
+                      " \\(.*")) %>%
+  mutate(debulking_status = case_when(
+    debulking_status == "Incomplete Records"             ~ NA_character_,
+    debulking_status == "Complete"                       ~ "Optimal",
+    !is.na(debulking_status)                             ~ debulking_status
+  )) %>% 
   mutate(race = case_when(
     race %in% 
-      c("Other", "Asian", "Pacif", "Unko", 
+      c("Other", "Asian", "Pacif", 
         "Filip", "Pakis")                                ~ "Other",
     race == "Unkno"                                      ~ "Unknown",
     TRUE                                                 ~ race
+  ), race = factor(race, levels= c("White", "Black", "Other")
   )) %>% 
   mutate(ethnicity = case_when(
     ethnicity == "Non-spanish"                           ~ "Non-Hispanic",
     ethnicity %in% 
       c("Spanish Nos", "Puerto Rican", 
         "Mexican", "Cuban", "South/centra")              ~ "Hispanic",
-    TRUE                                                 ~ ethnicity
+    TRUE                                                 ~ NA_character_
+  ), ethnicity = factor(ethnicity, levels= c("Hispanic", 
+                                             "Non-Hispanic")
   )) %>% 
   mutate(raceeth = case_when(
     race == "White" &
@@ -102,13 +117,12 @@ clinical <- clinical %>%
     race == "Black" &
       ethnicity == "Non-Hispanic"        ~ "Black Non-Hispanic",
     ethnicity == "Hispanic"              ~ "Hispanic",
-    race %in% 
-      c("Other", "Unknown") |
-      ethnicity == "Unknown"             ~ "Other/Unknown"
+    race == "Other" |
+      ethnicity == "Non-Hispanic"        ~ "Other"
   )) %>% 
   mutate(raceeth = factor(raceeth, 
                           levels = c("White Non-Hispanic", "Black Non-Hispanic", 
-                                     "Hispanic","Other/Unknown")) ) %>% 
+                                     "Hispanic","Other")) ) %>% 
   mutate(tnm_cs_mixed_group_stage = factor(tnm_cs_mixed_group_stage)) %>% 
   mutate(preDx_hypertension = case_when(
     str_detect(hypertension, "pre|Pre|both")                      ~ "Yes",
@@ -150,7 +164,7 @@ clinical <- clinical %>%
     str_detect(cardiac_conditions_including_bu, "post|Post|both") ~ "Yes",
     TRUE                                                          ~ "No"
   )) %>%
-  
+  mutate(across(starts_with("PreDx"), ~ factor(., levels= c("Yes", "No")))) %>% 
   mutate(preDx_comorbidities = case_when(
     str_detect(hypertension, "pre|Pre") |
       str_detect(diabetes_mellitus, "pre|Pre") |
@@ -159,9 +173,6 @@ clinical <- clinical %>%
       str_detect(cardiac_conditions_including_bu, "pre|Pre")       ~ "Comorbidities",
     TRUE                                                           ~ "No comorbidities"
   )) %>%
-  mutate(debulking_status =
-           str_remove(debulking_status,
-                      " \\(.*")) %>%
   # mutate(any_germline_brca_mutation = case_when(
   #   germline_brca1_mutation == "Yes" |
   #     germline_brca2_mutation == "Yes"       ~ "Yes",
@@ -186,18 +197,44 @@ clinical <- clinical %>%
     TRUE ~ as.Date(as.numeric(date_of_first_adjuvant_chemother),
               origin = "1899-12-30")
   )) %>% 
-  # mutate(debulking_status = case_when(
-  #   debulking_status == "Incomplete Records"    ~ NA_character_,
-  #   TRUE                                        ~ debulking_status
-  # )) %>% 
-  # left_join(ID_linkage, ., by = "mrn") %>% 
+  mutate(ecog_pretrt_date = case_when(
+    str_detect(ecog_pretrt_date, "/....$")    
+    ~ as.Date(
+      as.POSIXct(format(
+        as.Date(ecog_pretrt_date, format="%m/%d/%Y")
+        , "%m/%d/%y"), 
+        format = "%m/%d/%y")),
+    TRUE ~ as.Date(as.numeric(ecog_pretrt_date),
+                   origin = "1899-12-30")
+  )) %>% 
+  mutate(ecog_posttrt_date = case_when(
+    str_detect(ecog_posttrt_date, "/....$")    
+    ~ as.Date(
+      as.POSIXct(format(
+        as.Date(ecog_posttrt_date, format="%m/%d/%Y")
+        , "%m/%d/%y"), 
+        format = "%m/%d/%y")),
+    TRUE ~ as.Date(as.numeric(ecog_posttrt_date),
+                   origin = "1899-12-30")
+  )) %>% 
+  mutate(ecog_recurr_date = case_when(
+    str_detect(ecog_recurr_date, "/....$")    
+    ~ as.Date(
+      as.POSIXct(format(
+        as.Date(ecog_recurr_date, format="%m/%d/%Y")
+        , "%m/%d/%y"), 
+        format = "%m/%d/%y")),
+    TRUE ~ as.Date(as.numeric(ecog_recurr_date),
+                   origin = "1899-12-30")
+  )) %>% 
+  mutate(across(contains("date"), ~as.Date(.))) %>% 
   select(-c(moffitt_patient, summary_of_rx_1st_course, summary_of_rx_1st_course_at_t, subject_number))
 
 clinical_var <- function(data) {
   data <- data %>% 
     # For summary stats
-    mutate(age_at_Dx = round(interval(start = date_of_birth, end = date_of_diagnosis)/
-                               duration(n=1, units = "years"), 2)) %>% 
+    # mutate(age_at_Dx = round(interval(start = date_of_birth, end = date_of_diagnosis)/
+    #                            duration(n=1, units = "years"), 2)) %>% 
     mutate(months_at_first_neoadjuvant_chem = round(interval(start = date_of_diagnosis, end = date_of_first_neoadjuvant_chemot)/
                                                       duration(n=1, units = "months"), 2)) %>% 
     mutate(months_at_first_adjuvant_chem = round(interval(start = date_of_diagnosis, end = date_of_first_adjuvant_chemother)/
@@ -223,7 +260,7 @@ clinical_var <- function(data) {
     
     mutate(recurrence_time = round(interval(start = first_treatment_date, end = rec_event_date)/
                                                   duration(n=1, units = "months"), 2)) %>% 
-    mutate(rec_event = ifelse((has_the_patient_recurred == "No"), 0, 1)) %>%
+    mutate(recurrence_event = ifelse((has_the_patient_recurred == "No"), 0, 1)) %>%
     mutate(has_the_patient_recurred = case_when(
       str_detect(has_the_patient_recurred, "Yes|yes")          ~ "Recurrence",
       str_detect(has_the_patient_recurred, "No|no")           ~ "No Recurrence"
@@ -274,6 +311,35 @@ radiomics <- left_join(features %>%
                        by = "mrn") %>% 
   filter(!is.na(has_the_patient_recurred))
 write_rds(radiomics, "radiomics.rds")
+
+analysis_data <- left_join(features %>% 
+                         select(mrn, contrastenhancementyn) ,
+                       clinical,
+                       by = "mrn") %>% 
+  filter(contrastenhancementyn == "yes") %>%
+  # filter(contrast_enhancement == "Yes") %>%
+  filter(!is.na(has_the_patient_recurred)) %>% 
+  select(mrn, treatment_type : date_of_first_adjuvant_chemother,
+         date_of_diagnosis, age_at_diagnosis, year_of_diagnosis,
+         race, ethnicity, raceeth, gender,
+         tnm_cs_mixed_group_stage, tnm_edition_number_must_use, 
+         primary_site : grade_differentiation, 
+         debulking_status, date_of_surgery_abstracted,
+         vital_new : fwdate_most_recent, 
+         os_time, os_event, 
+         date_of_first_recurrence,
+         rec_event_date, recurrence_time, 
+         recurrence_event, has_the_patient_recurred,
+         # age_at_first_recurrence,
+         germline_brca1_mutation : any_unclassified_brca_mutation,
+         ecog_pretrt : ecog_recurr_date,
+         starts_with("preDx"),
+         # everything(),
+         contrastenhancementyn
+         )
+write_csv(analysis_data, "clinical data patients included in radiomics miles for moffitt analysis_06292023.csv")
+
+
 
 # End cleaning
 
