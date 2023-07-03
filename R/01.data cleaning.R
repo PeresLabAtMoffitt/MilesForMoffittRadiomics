@@ -48,13 +48,19 @@ features <-
   select(mrn, contrastenhancementyn, lesionid, matches("^f[0-9]"))
 contrast_info <- features %>% 
   select(mrn, contrastenhancementyn)
-  
 
 clinical <- readxl::read_xlsx(
   paste0(path,
          "/data/analysis dataset/radiomic_CT_modif_06092022.xlsx"))
 
-
+path <- fs::path("","Volumes","Peres_Research", "Ovarian - Radiomics", "CTbased adiposity")
+fct_name_repair <- function(colnms) {
+  tolower(gsub("[, ()=/]", "_", colnms))
+}
+bmi_data <-
+  readxl::read_xlsx(paste0(path,"/dataset/CT data 09272021.xlsx"),
+                    .name_repair = fct_name_repair) %>% 
+  `colnames<-`(str_replace(colnames(.), "__", "_"))
 ################################################################################################# II ### Features----
 summary(features[4])
 class(features) <- "data.frame"
@@ -67,6 +73,36 @@ summary(features[4])
 
 
 ################################################################################################# III ### Clinical----
+bmi_data <- bmi_data %>% 
+  purrr::keep(~!all(is.na(.))) %>%
+  mutate(weight_kg = case_when(
+    weight_unit == "kg" |
+      weight_unit == "Kg"           ~ weight,
+    weight_unit == "lbs"            ~ weight / 2.205
+  )) %>% 
+  # Create variable
+  mutate(bmi = weight_kg / (height_m_ * height_m_)) %>% 
+  mutate(bmi_cat = case_when(
+    bmi < 25                    ~ "Underweight and normal weight",
+    bmi >= 25 &
+      bmi < 30                  ~ "Overweight",
+    bmi >= 30                   ~ "Obese"
+  )) %>%
+  mutate(bmi_cat = factor(bmi_cat, levels = c("Underweight and normal weight", "Overweight", "Obese")))  %>% 
+  mutate(bmi_cat2 = case_when(
+    bmi < 25                                         ~ "<25",
+    bmi >= 25 &
+      bmi < 30                                       ~ "25-29",
+    bmi >= 30 &
+      bmi < 35                                       ~ "30-34",
+    bmi >= 35                                        ~ "≥35"
+  )) %>% 
+  mutate(bmi_cat2 = factor(bmi_cat2, levels = c("<25", "25-29", "30-34", "≥35"))) %>% 
+  select(mrn, bmi, bmi_cat, bmi_cat2)
+
+
+
+
 clinical <- clinical %>% 
   janitor::clean_names() %>% 
   # mutate(mrn = as.character(mrn)) %>% 
@@ -304,6 +340,10 @@ clinical <- clinical_var(data = clinical)
 write_rds(clinical, "clinical.rds")
 
 ################################################################################################# IV ### Bind df----
+clinical <- clinical %>% 
+  left_join(., bmi_data,
+            by= "mrn")
+
 radiomics <- left_join(features %>% 
                          select(mrn, contrastenhancementyn, 
                                 (order(colnames(.)))) ,
@@ -322,6 +362,7 @@ analysis_data <- left_join(features %>%
   select(mrn, treatment_type : date_of_first_adjuvant_chemother,
          date_of_diagnosis, age_at_diagnosis, year_of_diagnosis,
          race, ethnicity, raceeth, gender,
+         bmi, bmi_cat, bmi_cat2,
          tnm_cs_mixed_group_stage, tnm_edition_number_must_use, 
          primary_site : grade_differentiation, 
          debulking_status, date_of_surgery_abstracted,
@@ -337,8 +378,8 @@ analysis_data <- left_join(features %>%
          # everything(),
          contrastenhancementyn
          )
-write_csv(analysis_data, "clinical data patients included in radiomics miles for moffitt analysis_06292023.csv")
-
+write_csv(analysis_data, "clinical data patients included in radiomics miles for moffitt analysis_06302023.csv")
+write_rds(analysis_data, "analysis_data_06302023.rds")
 
 
 # End cleaning

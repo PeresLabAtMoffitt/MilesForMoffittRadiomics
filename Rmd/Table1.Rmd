@@ -1,8 +1,27 @@
+---
+title: "Table1"
+author: "Christelle Colin-Leitzinger"
+date: "2023-06-30"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE,
+                      cache = FALSE)
+```
+
+```{r}
 library(tidyverse)
 library(gtsummary)
 theme_gtsummary_compact()
 
-tbl <- analysis_data %>% 
+analysis_data <- read_rds("~/Documents/GitHub/Peres/MilesForMoffittRadiomics/analysis_data_06302023.rds")
+```
+
+```{r}
+analysis_data %>% 
   select(age_at_diagnosis, year_of_diagnosis,
          race, ethnicity, raceeth, gender,
          bmi, bmi_cat, bmi_cat2,
@@ -17,17 +36,6 @@ tbl <- analysis_data %>%
   tbl_summary(by= treatment_type,
               type = list(starts_with("PreDx") ~ "categorical")) %>% 
   bold_labels() %>% add_p() %>% bold_p(t= .05) %>% 
-  add_overall() %>% 
-  as_gt() 
-tbl %>% 
-  gt::gtsave(zoom=1.5,
-    filename = "Radiomics Table1.png"
-  )
-
-
-
-
-
-
-
+  add_overall()
+```
 
